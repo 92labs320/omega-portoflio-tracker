@@ -1,4 +1,4 @@
-import { Link, Stack } from 'expo-router';
+﻿import { Link, Stack } from 'expo-router';
 import { StyleSheet } from 'react-native';
 
 import { Text, View } from '@/components/Themed';
@@ -38,3 +38,5 @@ const styles = StyleSheet.create({
     color: '#2e78b7',
   },
 });
+
+
