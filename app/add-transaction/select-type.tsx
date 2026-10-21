@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography } from '@/constants/Colors';
 
 const TRANSACTION_TYPES = [
@@ -29,46 +30,47 @@ const TRANSACTION_TYPES = [
     id: 'stake',
     label: 'Stake',
     icon: 'lock-outline',
-    description: 'Stake your assets',
+    description: 'Lock assets for staking (quantity unchanged)',
     color: Colors.blue,
   },
   {
     id: 'unstake',
     label: 'Unstake',
     icon: 'lock-open-outline',
-    description: 'Unstake your assets',
+    description: 'Unlock staked assets (quantity unchanged)',
     color: Colors.orange,
   },
   {
     id: 'reward',
     label: 'Reward',
     icon: 'gift-outline',
-    description: 'Received reward',
+    description: 'Staking or interest reward received',
     color: Colors.green,
   },
   {
     id: 'airdrop',
     label: 'Airdrop',
     icon: 'parachute',
-    description: 'Received airdrop',
+    description: 'Tokens received for free',
     color: Colors.blue,
   },
 ];
 
 export default function SelectTypeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ category?: string }>();
   const category = params?.category || 'crypto';
 
   const handleSelectType = (typeId: string) => {
     router.push({
-      pathname: '/add-transaction',
+      pathname: '/add-transaction/form',
       params: { type: typeId, category },
     });
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingTop: insets.top }}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <MaterialCommunityIcons
@@ -84,7 +86,7 @@ export default function SelectTypeScreen() {
       <Text style={styles.subtitle}>Choose transaction type</Text>
 
       <View style={styles.grid}>
-        {TRANSACTION_TYPES.map((type) => (
+        {TRANSACTION_TYPES.filter((t) => category === 'crypto' || t.id === 'buy' || t.id === 'sell').map((type) => (
           <TouchableOpacity
             key={type.id}
             style={styles.card}
@@ -96,7 +98,7 @@ export default function SelectTypeScreen() {
             >
               <MaterialCommunityIcons
                 name={type.icon as any}
-                size={32}
+                size={28}
                 color={Colors.background}
               />
             </View>
@@ -140,13 +142,13 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '50%',
-    paddingHorizontal: 8,
-    marginBottom: 16,
+    paddingHorizontal: 6,
+    marginBottom: 12,
   },
   iconContainer: {
-    width: '100%',
-    aspectRatio: 1,
-    borderRadius: 16,
+    width: 52,
+    height: 52,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,

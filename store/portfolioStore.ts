@@ -1,81 +1,131 @@
 ﻿import { create } from 'zustand';
 
-export interface Transaction {
-  id:        string;
-  assetId:   string;
-  symbol:    string;
-  name:      string;
-  type:      'buy' | 'sell' | 'stake' | 'unstake' | 'reward' | 'airdrop';
-  quantity:  number;
-  priceUsd:  number;
-  date:      string; // ISO
-}
-
-export interface Holding {
-  assetId:      string;
-  symbol:       string;
-  name:         string;
-  quantity:     number;
-  avgCostUsd:   number;
-  currentPrice: number;
-}
+import * as db from '@/lib/db';
+import { computeHoldings, quoteKey } from '@/lib/portfolio';
+import { isSyncEnabled, syncNow } from '@/lib/sync';
+import type { Holding, Quote, Transaction, TransactionInput } from '@/lib/types';
+import { fetchCryptoQuotes, fetchStockQuotes } from '@/services/marketService';
 
 interface PortfolioState {
+  ready: boolean;
   transactions: Transaction[];
-  holdings:     Holding[];
-  totalValue:   number;
-  totalCost:    number;
-  addTransaction: (tx: Omit<Transaction, 'id'>) => void;
-  setCurrentPrices: (prices: Record<string, number>) => void;
+  holdings: Holding[];
+  /** Keyed by quoteKey(category, assetId). */
+  quotes: Record<string, Quote>;
+  quotesUpdatedAt: string | null;
+  quotesError: string | null;
+  quotesLoading: boolean;
+  syncError: string | null;
+
+  load: () => Promise<void>;
+  refreshQuotes: () => Promise<void>;
+  add: (input: TransactionInput) => Promise<void>;
+  update: (id: string, input: TransactionInput) => Promise<void>;
+  remove: (id: string) => Promise<void>;
+  sync: () => Promise<void>;
+  reset: () => void;
 }
 
-function recomputeHoldings(txs: Transaction[]): Holding[] {
-  const map = new Map<string, { qty: number; cost: number; symbol: string; name: string }>();
-  for (const tx of txs) {
-    const entry = map.get(tx.assetId) ?? { qty: 0, cost: 0, symbol: tx.symbol, name: tx.name };
-    if (tx.type === 'buy' || tx.type === 'reward' || tx.type === 'airdrop') {
-      entry.cost += tx.quantity * tx.priceUsd;
-      entry.qty  += tx.quantity;
-    } else if (tx.type === 'sell') {
-      entry.qty -= tx.quantity;
-    }
-    map.set(tx.assetId, entry);
-  }
-  return Array.from(map.entries())
-    .filter(([, v]) => v.qty > 0)
-    .map(([id, v]) => ({
-      assetId:      id,
-      symbol:       v.symbol,
-      name:         v.name,
-      quantity:     v.qty,
-      avgCostUsd:   v.qty > 0 ? v.cost / v.qty : 0,
-      currentPrice: 0,
-    }));
+function derive(transactions: Transaction[]) {
+  return { transactions, holdings: computeHoldings(transactions) };
 }
 
-export const usePortfolioStore = create<PortfolioState>((set) => ({
-  transactions: [],
-  holdings:     [],
-  totalValue:   0,
-  totalCost:    0,
+export const usePortfolioStore = create<PortfolioState>((set, get) => {
+  /** Fire-and-forget backup after a local change; never blocks the UI. */
+  const backgroundSync = () => {
+    isSyncEnabled()
+      .then((on) => (on ? get().sync() : undefined))
+      .catch(() => {});
+  };
 
-  addTransaction: (tx) =>
-    set((state) => {
-      const newTxs = [...state.transactions, { ...tx, id: Date.now().toString() }];
-      const holdings = recomputeHoldings(newTxs);
-      return { transactions: newTxs, holdings };
-    }),
+  return {
+    ready: false,
+    transactions: [],
+    holdings: [],
+    quotes: {},
+    quotesUpdatedAt: null,
+    quotesError: null,
+    quotesLoading: false,
+    syncError: null,
 
-  setCurrentPrices: (prices) =>
-    set((state) => {
-      const holdings = state.holdings.map((h) => ({
-        ...h,
-        currentPrice: prices[h.assetId] ?? h.currentPrice,
-      }));
-      const totalValue = holdings.reduce((sum, h) => sum + h.quantity * h.currentPrice, 0);
-      const totalCost  = holdings.reduce((sum, h) => sum + h.quantity * h.avgCostUsd, 0);
-      return { holdings, totalValue, totalCost };
-    }),
-}));
+    load: async () => {
+      const txs = await db.listTransactions();
+      set({ ...derive(txs), ready: true });
+    },
 
+    refreshQuotes: async () => {
+      const open = get().holdings.filter((h) => h.quantity > 0);
+      if (open.length === 0) {
+        set({ quotesError: null });
+        return;
+      }
+      set({ quotesLoading: true });
+      const cryptoIds = open.filter((h) => h.category === 'crypto').map((h) => h.assetId);
+      const stockIds = open.filter((h) => h.category === 'stock').map((h) => h.assetId);
+      const errors: string[] = [];
+      const next: Record<string, Quote> = { ...get().quotes };
 
+      const [crypto, stocks] = await Promise.allSettled([
+        fetchCryptoQuotes(cryptoIds),
+        fetchStockQuotes(stockIds),
+      ]);
+      if (crypto.status === 'fulfilled') {
+        for (const [id, q] of Object.entries(crypto.value)) next[quoteKey('crypto', id)] = q;
+      } else if (cryptoIds.length) {
+        errors.push(crypto.reason instanceof Error ? crypto.reason.message : 'Crypto prices unavailable');
+      }
+      if (stocks.status === 'fulfilled') {
+        for (const [id, q] of Object.entries(stocks.value)) next[quoteKey('stock', id)] = q;
+      } else if (stockIds.length) {
+        errors.push('Stock prices unavailable');
+      }
+
+      set({
+        quotes: next,
+        quotesLoading: false,
+        quotesError: errors.length ? errors.join(' · ') : null,
+        quotesUpdatedAt: errors.length === 0 ? new Date().toISOString() : get().quotesUpdatedAt,
+      });
+    },
+
+    add: async (input) => {
+      await db.createTransaction(input);
+      await get().load();
+      backgroundSync();
+      get().refreshQuotes().catch(() => {});
+    },
+
+    update: async (id, input) => {
+      await db.updateTransaction(id, input);
+      await get().load();
+      backgroundSync();
+    },
+
+    remove: async (id) => {
+      await db.deleteTransaction(id);
+      await get().load();
+      backgroundSync();
+    },
+
+    sync: async () => {
+      try {
+        const { pulled } = await syncNow();
+        set({ syncError: null });
+        if (pulled > 0) await get().load();
+      } catch (e) {
+        set({ syncError: e instanceof Error ? e.message : 'Sync failed' });
+        throw e;
+      }
+    },
+
+    reset: () =>
+      set({
+        transactions: [],
+        holdings: [],
+        quotes: {},
+        quotesUpdatedAt: null,
+        quotesError: null,
+        syncError: null,
+      }),
+  };
+});

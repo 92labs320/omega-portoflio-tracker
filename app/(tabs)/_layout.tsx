@@ -1,9 +1,6 @@
-﻿import React from 'react';
+import React from 'react';
 import { Tabs } from 'expo-router';
-import {
-  MaterialCommunityIcons,
-  FontAwesome5,
-} from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 
 export default function TabsLayout() {
@@ -76,12 +73,6 @@ export default function TabsLayout() {
               color={color}
             />
           ),
-        }}
-      />
-      <Tabs.Screen
-        name="two"
-        options={{
-          href: null,
         }}
       />
     </Tabs>

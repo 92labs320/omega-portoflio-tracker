@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -8,70 +9,54 @@ import {
   View,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CoinRow } from '@/components/CoinRow';
 import { Colors } from '@/constants/Colors';
+import { formatPct, formatTime } from '@/lib/format';
 import { useMarkets } from '@/hooks/useMarkets';
-import type { CoinMarket } from '@/services/marketService';
 
-const WATCHLIST = [
-  { id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin', price: 68240.12, change: 2.41 },
-  { id: 'ethereum', symbol: 'ETH', name: 'Ethereum', price: 3548.76, change: 1.83 },
-  { id: 'solana', symbol: 'SOL', name: 'Solana', price: 148.32, change: 4.26 },
-  { id: 'binancecoin', symbol: 'BNB', name: 'BNB', price: 596.44, change: -0.72 },
-  { id: 'ripple', symbol: 'XRP', name: 'XRP', price: 0.5264, change: 0.94 },
-  { id: 'cardano', symbol: 'ADA', name: 'Cardano', price: 0.4321, change: -1.18 },
-  { id: 'dogecoin', symbol: 'DOGE', name: 'Dogecoin', price: 0.1428, change: 2.07 },
-  { id: 'avalanche-2', symbol: 'AVAX', name: 'Avalanche', price: 35.82, change: -0.46 },
-  { id: 'polkadot', symbol: 'DOT', name: 'Polkadot', price: 6.54, change: 1.12 },
-  { id: 'chainlink', symbol: 'LINK', name: 'Chainlink', price: 14.76, change: 3.38 },
-] as const;
-
-type DisplayAsset = {
-  id: string;
-  symbol: string;
-  name: string;
-  price: number;
-  change: number;
-  isLive: boolean;
-};
-
-function formatPrice(price: number): string {
-  const maximumFractionDigits = price < 1 ? 4 : price < 100 ? 2 : 2;
-  return price.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: price < 1 ? 4 : 2,
-    maximumFractionDigits,
-  });
-}
-
-function getDisplayAssets(coins: CoinMarket[]): DisplayAsset[] {
-  const liveById = new Map(coins.map((coin) => [coin.id, coin]));
-
-  return WATCHLIST.map((fallback) => {
-    const live = liveById.get(fallback.id);
-    return {
-      id: fallback.id,
-      symbol: fallback.symbol,
-      name: fallback.name,
-      price: live?.current_price ?? fallback.price,
-      change: live?.price_change_percentage_24h ?? fallback.change,
-      isLive: Boolean(live),
-    };
-  });
-}
+const WATCHLIST_IDS = [
+  'bitcoin',
+  'ethereum',
+  'solana',
+  'binancecoin',
+  'ripple',
+  'cardano',
+  'dogecoin',
+  'avalanche-2',
+  'polkadot',
+  'chainlink',
+];
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { coins, loading, error, refresh } = useMarkets();
+  const router = useRouter();
+  const { coins, loading, error, updatedAt, refresh } = useMarkets({ perPage: 10, ids: WATCHLIST_IDS });
 
-  const assets = useMemo(() => getDisplayAssets(coins), [coins]);
-  const allLive = assets.every((asset) => asset.isLive);
-  const gainers = assets.filter((asset) => asset.change >= 0).length;
-  const topMover = assets.reduce((leader, asset) =>
-    Math.abs(asset.change) > Math.abs(leader.change) ? asset : leader
+  const assets = useMemo(() => {
+    const order = new Map(WATCHLIST_IDS.map((id, i) => [id, i]));
+    return coins.slice().sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99));
+  }, [coins]);
+
+  const withChange = assets.filter((a) => a.price_change_percentage_24h !== null);
+  const gainers = withChange.filter((a) => (a.price_change_percentage_24h ?? 0) >= 0).length;
+  const topGainer = withChange.reduce<(typeof assets)[number] | null>(
+    (best, a) => (!best || (a.price_change_percentage_24h ?? 0) > (best.price_change_percentage_24h ?? 0) ? a : best),
+    null,
   );
+  const topLoser = withChange.reduce<(typeof assets)[number] | null>(
+    (worst, a) => (!worst || (a.price_change_percentage_24h ?? 0) < (worst.price_change_percentage_24h ?? 0) ? a : worst),
+    null,
+  );
+  const hasData = assets.length > 0;
+
+  const openAdd = (id: string, symbol: string, name: string) =>
+    router.push({
+      pathname: '/add-transaction/form',
+      params: { category: 'crypto', type: 'buy', assetId: id, symbol, name },
+    });
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -80,11 +65,7 @@ export default function HomeScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={loading && coins.length > 0}
-            onRefresh={refresh}
-            tintColor={Colors.accent}
-          />
+          <RefreshControl refreshing={loading && hasData} onRefresh={refresh} tintColor={Colors.accent} />
         }
       >
         <View style={styles.header}>
@@ -96,101 +77,99 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.statusRow}>
-          <View style={[styles.statusDot, !allLive && styles.statusDotFallback]} />
+          <View style={[styles.statusDot, (error || !hasData) && styles.statusDotFallback]} />
           <Text style={styles.statusText}>
-            {allLive ? 'Live market data' : 'Demo data shown while live prices are unavailable'}
+            {error
+              ? hasData
+                ? `Offline · last update ${formatTime(updatedAt)}`
+                : 'Live prices unavailable'
+              : hasData
+                ? `Live · updated ${formatTime(updatedAt)} · CoinGecko`
+                : 'Loading live prices…'}
           </Text>
           {loading && <ActivityIndicator size="small" color={Colors.accent} />}
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.summaryRow}
-        >
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryIcon}>
-              <MaterialCommunityIcons name="chart-line" size={19} color={Colors.accent} />
-            </View>
-            <Text style={styles.summaryLabel}>Crypto Market</Text>
-            <Text style={styles.summaryValue}>10 assets</Text>
-            <Text style={styles.summaryMeta}>{gainers} positive today</Text>
+        {!hasData && !loading ? (
+          <View style={styles.errorCard}>
+            <MaterialCommunityIcons name="wifi-off" size={28} color={Colors.textTertiary} />
+            <Text style={styles.errorTitle}>Can't reach market data</Text>
+            <Text style={styles.errorText}>{error ?? 'Check your connection and try again.'}</Text>
+            <Pressable style={styles.retryBtn} onPress={refresh} accessibilityRole="button">
+              <Text style={styles.retryText}>Try again</Text>
+            </Pressable>
           </View>
+        ) : null}
 
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryIcon}>
-              <MaterialCommunityIcons name="star-outline" size={19} color={Colors.accent} />
-            </View>
-            <Text style={styles.summaryLabel}>Stocks Watchlist</Text>
-            <Text style={styles.summaryValue}>Coming soon</Text>
-            <Text style={styles.summaryMeta}>Market tracking only</Text>
-          </View>
-
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryIcon}>
-              <MaterialCommunityIcons name="swap-vertical" size={19} color={Colors.accent} />
-            </View>
-            <Text style={styles.summaryLabel}>24h Movers</Text>
-            <Text style={styles.summaryValue}>{topMover.symbol}</Text>
-            <Text
-              style={[
-                styles.summaryMeta,
-                { color: topMover.change >= 0 ? Colors.accent : Colors.red },
-              ]}
-            >
-              {topMover.change >= 0 ? '+' : ''}
-              {topMover.change.toFixed(2)}%
-            </Text>
-          </View>
-        </ScrollView>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Market Watch</Text>
-          <Text style={styles.sectionCaption}>PRICE / 24H</Text>
-        </View>
-
-        <View style={styles.assetCard}>
-          {assets.map((asset, index) => {
-            const positive = asset.change >= 0;
-            return (
-              <View
-                key={asset.id}
-                style={[styles.assetRow, index < assets.length - 1 && styles.assetDivider]}
-              >
-                <View style={styles.assetIdentity}>
-                  <View style={styles.assetBadge}>
-                    <Text style={styles.assetBadgeText}>{asset.symbol.slice(0, 2)}</Text>
-                  </View>
-                  <View>
-                    <Text style={styles.assetSymbol}>{asset.symbol}</Text>
-                    <Text style={styles.assetName}>{asset.name}</Text>
-                  </View>
+        {hasData && (
+          <>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.summaryRow}>
+              <View style={styles.summaryCard}>
+                <View style={styles.summaryIcon}>
+                  <MaterialCommunityIcons name="chart-line" size={19} color={Colors.accent} />
                 </View>
+                <Text style={styles.summaryLabel}>Crypto Market</Text>
+                <Text style={styles.summaryValue}>{assets.length} assets</Text>
+                <Text style={styles.summaryMeta}>{gainers} up in 24h</Text>
+              </View>
 
-                <View style={styles.assetValues}>
-                  <Text style={styles.assetPrice}>{formatPrice(asset.price)}</Text>
-                  <Text
-                    style={[
-                      styles.assetChange,
-                      { color: positive ? Colors.accent : Colors.red },
-                    ]}
-                  >
-                    {positive ? '+' : ''}
-                    {asset.change.toFixed(2)}%
+              {topGainer && (
+                <View style={styles.summaryCard}>
+                  <View style={styles.summaryIcon}>
+                    <MaterialCommunityIcons name="trending-up" size={19} color={Colors.accent} />
+                  </View>
+                  <Text style={styles.summaryLabel}>Top gainer 24h</Text>
+                  <Text style={styles.summaryValue}>{topGainer.symbol.toUpperCase()}</Text>
+                  <Text style={[styles.summaryMeta, { color: Colors.accent }]}>
+                    {formatPct(topGainer.price_change_percentage_24h)}
                   </Text>
                 </View>
-              </View>
-            );
-          })}
-        </View>
+              )}
 
-        {error && (
-          <Text style={styles.dataNote}>
-            Live data could not be refreshed. Displayed fallback prices are examples only.
-          </Text>
+              {topLoser && (
+                <View style={styles.summaryCard}>
+                  <View style={[styles.summaryIcon, { backgroundColor: 'rgba(255,68,68,0.11)' }]}>
+                    <MaterialCommunityIcons name="trending-down" size={19} color={Colors.red} />
+                  </View>
+                  <Text style={styles.summaryLabel}>Top loser 24h</Text>
+                  <Text style={styles.summaryValue}>{topLoser.symbol.toUpperCase()}</Text>
+                  <Text
+                    style={[
+                      styles.summaryMeta,
+                      { color: (topLoser.price_change_percentage_24h ?? 0) < 0 ? Colors.red : Colors.accent },
+                    ]}
+                  >
+                    {formatPct(topLoser.price_change_percentage_24h)}
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Market Watch</Text>
+              <Text style={styles.sectionCaption}>PRICE / 24H</Text>
+            </View>
+
+            <View style={styles.assetCard}>
+              {assets.map((a, i) => (
+                <CoinRow
+                  key={a.id}
+                  symbol={a.symbol}
+                  name={a.name}
+                  image={a.image}
+                  price={a.current_price}
+                  change24h={a.price_change_percentage_24h}
+                  divider={i < assets.length - 1}
+                  onPress={() => openAdd(a.id, a.symbol.toUpperCase(), a.name)}
+                />
+              ))}
+            </View>
+            <Text style={styles.hint}>Tap an asset to record a transaction.</Text>
+          </>
         )}
+
         <Text style={styles.disclaimer}>
-          Market information is provided for informational portfolio tracking only.
+          Prices may be delayed. Omega is a tracking tool, not a broker, exchange or financial advisor.
         </Text>
       </ScrollView>
     </View>
@@ -373,6 +352,33 @@ const styles = StyleSheet.create({
   assetChange: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  errorCard: {
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginTop: 12,
+    padding: 24,
+    backgroundColor: Colors.card,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  errorTitle: { color: Colors.text, fontSize: 17, fontWeight: '700', marginTop: 12 },
+  errorText: { color: Colors.textSecondary, fontSize: 13, textAlign: 'center', marginTop: 6 },
+  retryBtn: {
+    marginTop: 16,
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: Colors.accent,
+  },
+  retryText: { color: Colors.background, fontWeight: '700', fontSize: 14 },
+  hint: {
+    color: Colors.textTertiary,
+    fontSize: 11,
+    marginHorizontal: 24,
+    marginTop: 10,
+    textAlign: 'center',
   },
   dataNote: {
     color: Colors.orange,

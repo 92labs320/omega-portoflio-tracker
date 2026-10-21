@@ -1,0 +1,23 @@
+{
+  "name": "omega-api",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Omega Portfolio Tracker API — anonymous backup to Neon Postgres, stock quotes proxy, legal pages.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "migrate": "node scripts/migrate.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.0",
+    "@types/node": "^22.0.0",
+    "@vercel/node": "^5.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,98 +1,116 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
   ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
   TextInput,
-  TouchableOpacity,
+  View,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { CoinRow } from '@/components/CoinRow';
 import { Colors, Typography } from '@/constants/Colors';
-import { coingeckoService, CoinData } from '@/services/coingecko';
-import { AssetRow } from '@/components/AssetRow';
+import { formatTime } from '@/lib/format';
+import { useMarkets } from '@/hooks/useMarkets';
+import type { CoinMarket } from '@/services/marketService';
 
 export default function MarketsScreen() {
-  const [coins, setCoins] = useState<CoinData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { coins, loading, error, updatedAt, refresh } = useMarkets({ perPage: 100 });
+  const [query, setQuery] = useState('');
 
-  useEffect(() => {
-    loadCoins();
-  }, []);
+  const filtered = useMemo(() => {
+    const q = query.trim().toUpperCase();
+    if (!q) return coins;
+    return coins.filter((c) => c.symbol.toUpperCase().includes(q) || c.name.toUpperCase().includes(q));
+  }, [coins, query]);
 
-  const loadCoins = async () => {
-    try {
-      setLoading(true);
-      const data = await coingeckoService.getTopCoins();
-      setCoins(data);
-    } catch (error) {
-      console.error('Error loading coins:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filteredCoins = coins.filter(
-    (coin) =>
-      coin.symbol.toUpperCase().includes(searchQuery.toUpperCase()) ||
-      coin.name.toUpperCase().includes(searchQuery.toUpperCase())
-  );
-
-  const renderCoin = ({ item }: { item: CoinData }) => (
-    <AssetRow
+  const renderItem = ({ item, index }: { item: CoinMarket; index: number }) => (
+    <CoinRow
+      rank={index + 1}
       symbol={item.symbol}
       name={item.name}
-      quantity={1}
-      currentPrice={item.current_price}
-      avgCostUsd={0}
+      image={item.image}
+      price={item.current_price}
       change24h={item.price_change_percentage_24h}
-      icon={item.image}
+      divider
+      onPress={() =>
+        router.push({
+          pathname: '/add-transaction/form',
+          params: {
+            category: 'crypto',
+            type: 'buy',
+            assetId: item.id,
+            symbol: item.symbol.toUpperCase(),
+            name: item.name,
+          },
+        })
+      }
     />
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Text style={styles.title}>Markets</Text>
+        <Text style={styles.subtitle}>
+          {error
+            ? coins.length
+              ? `Offline · last update ${formatTime(updatedAt)}`
+              : 'Live prices unavailable'
+            : `Top 100 crypto by market cap · ${updatedAt ? `updated ${formatTime(updatedAt)}` : 'loading…'}`}
+        </Text>
       </View>
 
       <View style={styles.searchContainer}>
-        <MaterialCommunityIcons
-          name="magnify"
-          size={20}
-          color={Colors.textSecondary}
-          style={styles.searchIcon}
-        />
+        <MaterialCommunityIcons name="magnify" size={20} color={Colors.textSecondary} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search coins..."
+          placeholder="Search coins"
           placeholderTextColor={Colors.textTertiary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
+          value={query}
+          onChangeText={setQuery}
+          autoCorrect={false}
+          autoCapitalize="none"
+          returnKeyType="search"
+          clearButtonMode="while-editing"
         />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <MaterialCommunityIcons
-              name="close"
-              size={20}
-              color={Colors.textSecondary}
-            />
-          </TouchableOpacity>
-        )}
       </View>
 
-      {loading ? (
-        <View style={styles.loadingContainer}>
+      {loading && coins.length === 0 ? (
+        <View style={styles.center}>
           <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
+      ) : coins.length === 0 ? (
+        <View style={styles.center}>
+          <MaterialCommunityIcons name="wifi-off" size={32} color={Colors.textTertiary} />
+          <Text style={styles.emptyTitle}>Can't reach market data</Text>
+          <Text style={styles.emptyText}>{error ?? 'Check your connection.'}</Text>
+          <Pressable style={styles.retryBtn} onPress={refresh} accessibilityRole="button">
+            <Text style={styles.retryText}>Try again</Text>
+          </Pressable>
         </View>
       ) : (
         <FlatList
-          data={filteredCoins}
-          renderItem={renderCoin}
+          data={filtered}
+          renderItem={renderItem}
           keyExtractor={(item) => item.id}
-          scrollEnabled={false}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={Colors.accent} />}
+          ListEmptyComponent={
+            <Text style={styles.noMatch}>No coin matches "{query}" in the top 100.</Text>
+          }
+          ListFooterComponent={
+            <Text style={styles.footer}>Market data provided by CoinGecko. Tap a coin to record a transaction.</Text>
+          }
         />
       )}
     </View>
@@ -100,45 +118,42 @@ export default function MarketsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    paddingBottom: 20,
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
-  },
-  title: {
-    ...Typography.largeTitle,
-    color: Colors.text,
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
+  header: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 12 },
+  title: { ...Typography.largeTitle, color: Colors.text },
+  subtitle: { ...Typography.footnote, color: Colors.textTertiary, marginTop: 4 },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 16,
     marginBottom: 12,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    height: 44,
     backgroundColor: Colors.card,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.borderLight,
   },
-  searchIcon: {
-    marginRight: 8,
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, color: Colors.text, fontSize: 16 },
+  list: { paddingBottom: 32 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  emptyTitle: { color: Colors.text, fontSize: 17, fontWeight: '700', marginTop: 12 },
+  emptyText: { color: Colors.textSecondary, fontSize: 13, textAlign: 'center', marginTop: 6 },
+  retryBtn: {
+    marginTop: 16,
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: Colors.accent,
   },
-  searchInput: {
-    flex: 1,
-    color: Colors.text,
-    ...Typography.body,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  retryText: { color: Colors.background, fontWeight: '700', fontSize: 14 },
+  noMatch: { color: Colors.textSecondary, textAlign: 'center', marginTop: 32, paddingHorizontal: 24 },
+  footer: {
+    color: Colors.textTertiary,
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 18,
+    paddingHorizontal: 24,
   },
 });
-
-

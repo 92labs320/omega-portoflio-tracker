@@ -8,36 +8,45 @@
     "scheme": "omegaportfoliotracker",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#000000"
-    },
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.92labs.omegaportfolio"
+      "supportsTablet": false,
+      "bundleIdentifier": "com.92labs.omegaportfolio",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleDevelopmentRegion": "en"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
-    },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "predictiveBackGestureEnabled": false,
+      "package": "com.labs92.omegaportfolio"
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#000000"
+        }
+      ],
       "expo-secure-store",
-      "expo-web-browser",
+      "expo-sqlite",
       "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "description": "Track your crypto and stock portfolio. Live prices, manual transactions, real profit and loss. No account required."
   }
 }
