@@ -3,85 +3,80 @@ import { AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 
 import { getKv, setKv } from '@/lib/db';
-import { fetchTopCoins, type CoinMarket } from '@/services/marketService';
+import { feedTimestamp, fetchMarketFeed, type CoinMarket } from '@/services/marketService';
 
 const REFRESH_MS = 60_000;
-/** Don't refetch when switching tabs if data is fresher than this. */
+/** Don't refetch when switching tabs if data was fetched less than this ago. */
 const STALE_MS = 30_000;
 const RETRY_MS = 20_000;
+const CACHE_KEY = 'cache.market_feed.v1';
 
 interface Snapshot {
   coins: CoinMarket[];
+  /** Provider timestamp of the newest price. */
   updatedAt: string;
+  fetchedAt: number;
 }
 
-/** Shared across screens so Home and Markets don't refetch the same thing. */
-const memory = new Map<string, Snapshot>();
+/** Shared by every screen so Home and Markets never fetch twice. */
+let memory: Snapshot | null = null;
+const listeners = new Set<(s: Snapshot) => void>();
+
+function publish(snap: Snapshot) {
+  memory = snap;
+  listeners.forEach((l) => l(snap));
+}
 
 /**
- * Live CoinGecko market data (through the Omega API cache). Never returns placeholder prices:
- * the last real snapshot is kept on the device and shown with its timestamp when offline.
+ * Live market data (top 250 by market cap) through the Omega API cache. Never returns placeholder
+ * prices: the last real snapshot is kept on the device and shown with its timestamp when offline.
  */
-export function useMarkets(opts: { perPage?: number; ids?: string[] } = {}) {
-  const { perPage = 100, ids } = opts;
-  const idsKey = ids ? Array.from(new Set(ids)).sort().join(',') : '';
-  const cacheKey = `cache.markets.${perPage}.${idsKey}`;
-
-  const [coins, setCoins] = useState<CoinMarket[]>(() => memory.get(cacheKey)?.coins ?? []);
-  const [updatedAt, setUpdatedAt] = useState<string | null>(() => memory.get(cacheKey)?.updatedAt ?? null);
-  const [loading, setLoading] = useState(true);
+export function useMarkets() {
+  const [snap, setSnap] = useState<Snapshot | null>(memory);
+  const [loading, setLoading] = useState(!memory);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const apply = useCallback(
-    (snap: Snapshot) => {
-      memory.set(cacheKey, snap);
-      setCoins(snap.coins);
-      setUpdatedAt(snap.updatedAt);
-    },
-    [cacheKey],
-  );
-
-  // Restore the last real snapshot from the device on first mount.
   useEffect(() => {
-    if (memory.has(cacheKey)) return;
-    getKv(cacheKey)
-      .then((raw) => {
-        if (!raw || memory.has(cacheKey)) return;
-        const snap = JSON.parse(raw) as Snapshot;
-        if (Array.isArray(snap.coins) && snap.coins.length) apply(snap);
-      })
-      .catch(() => {});
-  }, [cacheKey, apply]);
+    listeners.add(setSnap);
+    if (!memory) {
+      getKv(CACHE_KEY)
+        .then((raw) => {
+          if (!raw || memory) return;
+          const saved = JSON.parse(raw) as Snapshot;
+          if (Array.isArray(saved.coins) && saved.coins.length) publish({ ...saved, fetchedAt: 0 });
+        })
+        .catch(() => {});
+    }
+    return () => {
+      listeners.delete(setSnap);
+    };
+  }, []);
 
-  const load = useCallback(
-    async (force = false) => {
-      const cached = memory.get(cacheKey);
-      if (!force && cached && Date.now() - new Date(cached.updatedAt).getTime() < STALE_MS) {
-        setLoading(false);
-        return;
-      }
-      if (inFlight.current) return;
-      inFlight.current = true;
-      setLoading(true);
-      if (retryTimer.current) clearTimeout(retryTimer.current);
-      try {
-        const data = await fetchTopCoins(perPage, idsKey ? idsKey.split(',') : undefined);
-        const snap = { coins: data, updatedAt: new Date().toISOString() };
-        apply(snap);
-        setError(null);
-        setKv(cacheKey, JSON.stringify(snap)).catch(() => {});
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Market data unavailable');
-        retryTimer.current = setTimeout(() => load(true), RETRY_MS);
-      } finally {
-        setLoading(false);
-        inFlight.current = false;
-      }
-    },
-    [perPage, idsKey, cacheKey, apply],
-  );
+  const load = useCallback(async (force = false) => {
+    if (!force && memory && Date.now() - memory.fetchedAt < STALE_MS) {
+      setLoading(false);
+      return;
+    }
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setLoading(true);
+    if (retryTimer.current) clearTimeout(retryTimer.current);
+    try {
+      const coins = await fetchMarketFeed(force);
+      const next = { coins, updatedAt: feedTimestamp(coins), fetchedAt: Date.now() };
+      publish(next);
+      setError(null);
+      setKv(CACHE_KEY, JSON.stringify(next)).catch(() => {});
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Market data unavailable');
+      retryTimer.current = setTimeout(() => load(true), RETRY_MS);
+    } finally {
+      setLoading(false);
+      inFlight.current = false;
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -102,5 +97,11 @@ export function useMarkets(opts: { perPage?: number; ids?: string[] } = {}) {
   }, [load]);
 
   const refresh = useCallback(() => load(true), [load]);
-  return { coins, loading, error, updatedAt, refresh };
+  return {
+    coins: snap?.coins ?? [],
+    updatedAt: snap?.updatedAt ?? null,
+    loading,
+    error,
+    refresh,
+  };
 }

@@ -10,6 +10,7 @@ export interface CoinMarket {
   price_change_percentage_24h: number | null;
   market_cap: number;
   total_volume: number;
+  last_updated?: string;
 }
 
 export interface CoinSearchResult {
@@ -44,30 +45,67 @@ async function getJson<T>(url: string, timeoutMs = 12000): Promise<T> {
 const viaApi = () => Config.apiUrl.length > 0;
 const sortIds = (ids: string[]) => Array.from(new Set(ids.filter(Boolean))).sort();
 
-export async function fetchTopCoins(perPage = 100, ids?: string[]): Promise<CoinMarket[]> {
-  const list = ids && ids.length ? sortIds(ids) : [];
-  if (viaApi()) {
-    const qs = `per_page=${perPage}${list.length ? `&ids=${encodeURIComponent(list.join(','))}` : ''}`;
-    return getJson<CoinMarket[]>(`${Config.apiUrl}/api/markets?${qs}`);
-  }
-  const url = new URL(`${Config.coinGeckoBase}/coins/markets`);
-  url.searchParams.set('vs_currency', 'usd');
-  url.searchParams.set('order', 'market_cap_desc');
-  url.searchParams.set('per_page', String(perPage));
-  url.searchParams.set('page', '1');
-  url.searchParams.set('sparkline', 'false');
-  url.searchParams.set('price_change_percentage', '24h');
-  if (list.length) url.searchParams.set('ids', list.join(','));
-  return getJson<CoinMarket[]>(url.toString());
+/** Number of coins in the shared market feed (Home, Markets and portfolio prices all use it). */
+export const FEED_SIZE = 250;
+
+let feedCache: { at: number; promise: Promise<CoinMarket[]> } | null = null;
+
+/**
+ * Top 250 coins by market cap. One shared request for the whole app (deduplicated for 50 s),
+ * itself cached at the edge by the Omega API so CoinGecko is called a few times per hour at most.
+ */
+export function fetchMarketFeed(force = false): Promise<CoinMarket[]> {
+  if (!force && feedCache && Date.now() - feedCache.at < 50_000) return feedCache.promise;
+  const promise = (async () => {
+    if (viaApi()) return getJson<CoinMarket[]>(`${Config.apiUrl}/api/markets?per_page=${FEED_SIZE}`);
+    const url = new URL(`${Config.coinGeckoBase}/coins/markets`);
+    url.searchParams.set('vs_currency', 'usd');
+    url.searchParams.set('order', 'market_cap_desc');
+    url.searchParams.set('per_page', String(FEED_SIZE));
+    url.searchParams.set('page', '1');
+    url.searchParams.set('sparkline', 'false');
+    url.searchParams.set('price_change_percentage', '24h');
+    return getJson<CoinMarket[]>(url.toString());
+  })();
+  feedCache = { at: Date.now(), promise };
+  promise.catch(() => {
+    if (feedCache?.promise === promise) feedCache = null;
+  });
+  return promise;
 }
 
-/** Live USD prices for CoinGecko ids. */
+/** Time of the most recent price in the feed (what the provider reports, not when we fetched it). */
+export function feedTimestamp(coins: CoinMarket[]): string {
+  let max = 0;
+  for (const c of coins) {
+    const t = c.last_updated ? Date.parse(c.last_updated) : NaN;
+    if (Number.isFinite(t) && t > max) max = t;
+  }
+  return new Date(max || Date.now()).toISOString();
+}
+
+/** Live USD prices for CoinGecko ids: taken from the shared feed, extra request only for coins outside the top 250. */
 export async function fetchCryptoQuotes(ids: string[]): Promise<Record<string, Quote>> {
   const unique = sortIds(ids);
   if (unique.length === 0) return {};
   const out: Record<string, Quote> = {};
-  for (let i = 0; i < unique.length; i += 100) {
-    const chunk = unique.slice(i, i + 100).join(',');
+
+  try {
+    const feed = await fetchMarketFeed();
+    const byId = new Map(feed.map((c) => [c.id, c]));
+    for (const id of unique) {
+      const c = byId.get(id);
+      if (c && typeof c.current_price === 'number') {
+        out[id] = { price: c.current_price, change24h: c.price_change_percentage_24h ?? null };
+      }
+    }
+  } catch {
+    // fall through to a direct lookup for everything
+  }
+
+  const missing = unique.filter((id) => !out[id]);
+  for (let i = 0; i < missing.length; i += 100) {
+    const chunk = missing.slice(i, i + 100).join(',');
     if (viaApi()) {
       const data = await getJson<{ quotes: Record<string, Quote> }>(
         `${Config.apiUrl}/api/prices?ids=${encodeURIComponent(chunk)}`,

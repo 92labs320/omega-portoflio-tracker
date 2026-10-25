@@ -33,11 +33,11 @@ const WATCHLIST_IDS = [
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { coins, loading, error, updatedAt, refresh } = useMarkets({ perPage: 10, ids: WATCHLIST_IDS });
+  const { coins, loading, error, updatedAt, refresh } = useMarkets();
 
   const assets = useMemo(() => {
     const order = new Map(WATCHLIST_IDS.map((id, i) => [id, i]));
-    return coins.slice().sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99));
+    return coins.filter((c) => order.has(c.id)).sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99));
   }, [coins]);
 
   const withChange = assets.filter((a) => a.price_change_percentage_24h !== null);

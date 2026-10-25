@@ -22,7 +22,7 @@ import type { CoinMarket } from '@/services/marketService';
 export default function MarketsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { coins, loading, error, updatedAt, refresh } = useMarkets({ perPage: 100 });
+  const { coins, loading, error, updatedAt, refresh } = useMarkets();
   const [query, setQuery] = useState('');
 
   const filtered = useMemo(() => {
@@ -64,7 +64,7 @@ export default function MarketsScreen() {
             ? coins.length
               ? `Offline · last update ${formatTime(updatedAt)}`
               : 'Live prices unavailable'
-            : `Top 100 crypto by market cap · ${updatedAt ? `updated ${formatTime(updatedAt)}` : 'loading…'}`}
+            : `Top 250 crypto by market cap · ${updatedAt ? `updated ${formatTime(updatedAt)}` : 'loading…'}`}
         </Text>
       </View>
 
@@ -106,7 +106,7 @@ export default function MarketsScreen() {
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={Colors.accent} />}
           ListEmptyComponent={
-            <Text style={styles.noMatch}>No coin matches "{query}" in the top 100.</Text>
+            <Text style={styles.noMatch}>No coin matches "{query}" in the top 250.</Text>
           }
           ListFooterComponent={
             <Text style={styles.footer}>Market data provided by CoinGecko. Tap a coin to record a transaction.</Text>

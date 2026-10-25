@@ -33,7 +33,7 @@ Omega is a clean, private portfolio tracker for crypto and stocks.
 Record your buys, sells, staking rewards and airdrops, and Omega shows what your portfolio is worth right now, with real profit and loss calculated from your own transactions.
 
 MARKETS AT A GLANCE
-• Live prices and 24h change for the top 100 cryptocurrencies
+• Live prices and 24h change for the top 250 cryptocurrencies
 • Top gainers and losers of the day
 • Search any coin and add it to your portfolio in two taps
 
@@ -71,7 +71,7 @@ First release.
 Omega is a manual portfolio tracker. No login is required.
 
 How to test:
-1. Home and Markets tabs show live crypto prices from CoinGecko.
+1. Home and Markets tabs show live crypto prices from CoinGecko (top 250).
 2. Tap any coin (or Portfolio > Add Transaction) to record a buy:
    choose Cryptocurrency > Buy, search "bitcoin", enter a quantity,
    tap "Use current price", then Add.

@@ -36,5 +36,8 @@ export async function coingecko<T>(path: string, params: Record<string, string>)
   }
 }
 
-/** Shared CDN cache: every user gets the same response for 60 s, stale copies served while refreshing. */
-export const MARKET_CACHE = 'public, max-age=0, s-maxage=60, stale-while-revalidate=600, stale-if-error=86400';
+/**
+ * Shared CDN cache: every user gets the same response for 5 min, stale copies served while refreshing.
+ * Keeps CoinGecko usage within the free Demo plan (10k calls/month) whatever the number of users.
+ */
+export const MARKET_CACHE = 'public, max-age=0, s-maxage=300, stale-while-revalidate=900, stale-if-error=86400';
