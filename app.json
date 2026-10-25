@@ -47,6 +47,13 @@
       "ios",
       "android"
     ],
-    "description": "Track your crypto and stock portfolio. Live prices, manual transactions, real profit and loss. No account required."
+    "description": "Track your crypto and stock portfolio. Live prices, manual transactions, real profit and loss. No account required.",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f035d4b6-e0c2-467f-9989-81b67ac49fa7"
+      }
+    },
+    "owner": "92labs320"
   }
 }
