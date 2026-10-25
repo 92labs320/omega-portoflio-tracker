@@ -26,6 +26,8 @@ interface PortfolioState {
   reset: () => void;
 }
 
+const QUOTES_KEY = 'cache.quotes';
+
 function derive(transactions: Transaction[]) {
   return { transactions, holdings: computeHoldings(transactions) };
 }
@@ -51,6 +53,20 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => {
     load: async () => {
       const txs = await db.listTransactions();
       set({ ...derive(txs), ready: true });
+      // Restore the last real quotes so values show instantly (and offline) with their timestamp.
+      if (Object.keys(get().quotes).length === 0) {
+        const raw = await db.getKv(QUOTES_KEY).catch(() => null);
+        if (raw) {
+          try {
+            const snap = JSON.parse(raw) as { quotes: Record<string, Quote>; updatedAt: string };
+            if (Object.keys(get().quotes).length === 0) {
+              set({ quotes: snap.quotes ?? {}, quotesUpdatedAt: snap.updatedAt ?? null });
+            }
+          } catch {
+            // ignore a corrupt cache
+          }
+        }
+      }
     },
 
     refreshQuotes: async () => {
@@ -80,12 +96,16 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => {
         errors.push('Stock prices unavailable');
       }
 
+      const updatedAt = errors.length === 0 ? new Date().toISOString() : get().quotesUpdatedAt;
       set({
         quotes: next,
         quotesLoading: false,
         quotesError: errors.length ? errors.join(' · ') : null,
-        quotesUpdatedAt: errors.length === 0 ? new Date().toISOString() : get().quotesUpdatedAt,
+        quotesUpdatedAt: updatedAt,
       });
+      if (errors.length === 0) {
+        db.setKv(QUOTES_KEY, JSON.stringify({ quotes: next, updatedAt })).catch(() => {});
+      }
     },
 
     add: async (input) => {

@@ -14,3 +14,14 @@ test('normalizes pasted DATABASE_URL variants', () => {
   assert.equal(normalizeDatabaseUrl('COLLE_ICI'), null);
   assert.equal(normalizeDatabaseUrl(undefined), null);
 });
+
+import { parseCoinIds } from '../lib/coingecko.js';
+import { HttpError } from '../lib/core.js';
+
+test('coin ids are validated, deduped and sorted', () => {
+  assert.deepEqual(parseCoinIds('solana, bitcoin,Bitcoin'), ['bitcoin', 'solana']);
+  assert.deepEqual(parseCoinIds('avalanche-2'), ['avalanche-2']);
+  assert.deepEqual(parseCoinIds(undefined), []);
+  assert.throws(() => parseCoinIds('bit coin'), HttpError);
+  assert.throws(() => parseCoinIds('../x'), HttpError);
+});

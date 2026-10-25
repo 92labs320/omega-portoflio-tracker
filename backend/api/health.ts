@@ -8,5 +8,6 @@ export default route(['GET'], async (_req, res) => {
     ok: rows[0]?.ok === 1,
     database: 'neon',
     stocks: Boolean(process.env.FINNHUB_API_KEY),
+    coingeckoKey: Boolean(process.env.COINGECKO_API_KEY),
   });
 });
