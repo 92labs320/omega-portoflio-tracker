@@ -131,7 +131,9 @@ export default function HomeScreen() {
                   <View style={[styles.summaryIcon, { backgroundColor: 'rgba(255,68,68,0.11)' }]}>
                     <MaterialCommunityIcons name="trending-down" size={19} color={Colors.red} />
                   </View>
-                  <Text style={styles.summaryLabel}>Top loser 24h</Text>
+                  <Text style={styles.summaryLabel}>
+                    {(topLoser.price_change_percentage_24h ?? 0) < 0 ? 'Top loser 24h' : 'Weakest 24h'}
+                  </Text>
                   <Text style={styles.summaryValue}>{topLoser.symbol.toUpperCase()}</Text>
                   <Text
                     style={[
