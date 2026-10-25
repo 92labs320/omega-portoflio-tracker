@@ -82,19 +82,19 @@ Inscris-toi sur https://finnhub.io/register et copie ta clé API. Sans clé, l'a
 3. **Environment Variables** :
    - `DATABASE_URL` = la chaîne Neon
    - `FINNHUB_API_KEY` = ta clé Finnhub
-4. Nomme le projet **omega-portfolio** pour obtenir `https://omega-portfolio.vercel.app`, puis clique **Deploy**.
+4. Nomme le projet **omega-portfolio** pour obtenir `https://omega-portoflio-tracker-backend.vercel.app`, puis clique **Deploy**.
 5. Vérifie :
-   - `https://omega-portfolio.vercel.app/api/health` doit répondre `{"ok":true,...}`
-   - `https://omega-portfolio.vercel.app/privacy` doit afficher la politique de confidentialité
+   - `https://omega-portoflio-tracker-backend.vercel.app/api/health` doit répondre `{"ok":true,...}`
+   - `https://omega-portoflio-tracker-backend.vercel.app/privacy` doit afficher la politique de confidentialité
 
-Si Vercel attribue un autre domaine, remplace `omega-portfolio.vercel.app` dans `eas.json`, `.env` et `docs/APP_STORE.md`.
+Domaine de production actuel : `omega-portoflio-tracker-backend.vercel.app` (déjà configuré dans `eas.json`, `constants/Config.ts` et `docs/APP_STORE.md`). La branche de production Vercel doit suivre `expo-app`.
 
 ### 4. Variables locales de l'app
 
 Crée `.env` à la racine (jamais commité) :
 
 ```
-EXPO_PUBLIC_API_URL=https://omega-portfolio.vercel.app
+EXPO_PUBLIC_API_URL=https://omega-portoflio-tracker-backend.vercel.app
 ```
 
 Pour les builds EAS, la valeur est déjà dans `eas.json`.

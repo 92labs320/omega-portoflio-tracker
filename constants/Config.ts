@@ -1,7 +1,7 @@
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/+$/, '');
 
 /** Public pages are served by the same Vercel project as the API (backend/public). */
-const site = apiUrl || 'https://omega-portfolio.vercel.app';
+const site = apiUrl || 'https://omega-portoflio-tracker-backend.vercel.app';
 
 export const Config = {
   /** Omega API (Vercel + Neon). Empty string = cloud backup and stock quotes unavailable. */

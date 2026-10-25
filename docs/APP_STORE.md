@@ -15,12 +15,12 @@ Everything to paste into App Store Connect for version 1.0.0. Primary language: 
 | Content rights | Does not contain third-party content requiring rights (market prices are factual data from public APIs) |
 | Age rating | 4+ (answer "None" everywhere; "Unrestricted Web Access": No; "Gambling": No) |
 | Price | Free |
-| Privacy Policy URL | https://omega-portfolio.vercel.app/privacy |
-| Support URL | https://omega-portfolio.vercel.app/support |
-| Marketing URL | https://omega-portfolio.vercel.app |
+| Privacy Policy URL | https://omega-portoflio-tracker-backend.vercel.app/privacy |
+| Support URL | https://omega-portoflio-tracker-backend.vercel.app/support |
+| Marketing URL | https://omega-portoflio-tracker-backend.vercel.app |
 | Copyright | 2026 92labs |
 
-> Replace `omega-portfolio.vercel.app` everywhere if Vercel gives your project another domain.
+> These URLs are served by the Vercel project `omega-portoflio-tracker-backend` (backend/public).
 
 ## Promotional text (170 max)
 
