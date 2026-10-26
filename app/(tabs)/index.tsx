@@ -16,6 +16,7 @@ import { CoinRow } from '@/components/CoinRow';
 import { Colors } from '@/constants/Colors';
 import { formatPct, formatTime } from '@/lib/format';
 import { useMarkets } from '@/hooks/useMarkets';
+import { useWatchlistStore } from '@/store/watchlistStore';
 
 const WATCHLIST_IDS = [
   'bitcoin',
@@ -35,13 +36,15 @@ export default function HomeScreen() {
   const router = useRouter();
   const { coins, loading, error, updatedAt, refresh } = useMarkets();
 
+  const followed = useWatchlistStore((s) => s.ids);
+  const usingFollowed = followed.length > 0 && coins.some((c) => followed.includes(c.id));
   const assets = useMemo(() => {
-    const order = new Map(WATCHLIST_IDS.map((id, i) => [id, i]));
+    const ids = usingFollowed ? followed : WATCHLIST_IDS;
+    const order = new Map(ids.map((id, i) => [id, i]));
     return coins.filter((c) => order.has(c.id)).sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99));
-  }, [coins]);
+  }, [coins, followed, usingFollowed]);
 
   const withChange = assets.filter((a) => a.price_change_percentage_24h !== null);
-  const gainers = withChange.filter((a) => (a.price_change_percentage_24h ?? 0) >= 0).length;
   const topGainer = withChange.reduce<(typeof assets)[number] | null>(
     (best, a) => (!best || (a.price_change_percentage_24h ?? 0) > (best.price_change_percentage_24h ?? 0) ? a : best),
     null,
@@ -52,11 +55,7 @@ export default function HomeScreen() {
   );
   const hasData = assets.length > 0;
 
-  const openAdd = (id: string, symbol: string, name: string) =>
-    router.push({
-      pathname: '/add-transaction/form',
-      params: { category: 'crypto', type: 'buy', assetId: id, symbol, name },
-    });
+  const openAsset = (id: string) => router.push({ pathname: '/asset/[key]', params: { key: `crypto:${id}` } });
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -109,8 +108,10 @@ export default function HomeScreen() {
                   <MaterialCommunityIcons name="chart-line" size={19} color={Colors.accent} />
                 </View>
                 <Text style={styles.summaryLabel}>Crypto Market</Text>
-                <Text style={styles.summaryValue}>{assets.length} assets</Text>
-                <Text style={styles.summaryMeta}>{gainers} up in 24h</Text>
+                <Text style={styles.summaryValue}>{coins.length} assets</Text>
+                <Text style={styles.summaryMeta}>
+                  {coins.filter((c) => (c.price_change_percentage_24h ?? 0) >= 0).length} up in 24h
+                </Text>
               </View>
 
               {topGainer && (
@@ -148,7 +149,7 @@ export default function HomeScreen() {
             </ScrollView>
 
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Market Watch</Text>
+              <Text style={styles.sectionTitle}>{usingFollowed ? 'Your watchlist' : 'Market Watch'}</Text>
               <Text style={styles.sectionCaption}>PRICE / 24H</Text>
             </View>
 
@@ -162,11 +163,15 @@ export default function HomeScreen() {
                   price={a.current_price}
                   change24h={a.price_change_percentage_24h}
                   divider={i < assets.length - 1}
-                  onPress={() => openAdd(a.id, a.symbol.toUpperCase(), a.name)}
+                  onPress={() => openAsset(a.id)}
                 />
               ))}
             </View>
-            <Text style={styles.hint}>Tap an asset to record a transaction.</Text>
+            <Text style={styles.hint}>
+              {usingFollowed
+                ? 'Tap an asset for charts and details.'
+                : 'Tap an asset for charts. Use the star to build your watchlist.'}
+            </Text>
           </>
         )}
 

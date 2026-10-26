@@ -2,7 +2,7 @@ import React, { memo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
-import { formatPct, formatUsd } from '@/lib/format';
+import { formatPct, formatSignedNumber, formatUsd } from '@/lib/format';
 
 export interface CoinRowProps {
   symbol: string;
@@ -34,7 +34,10 @@ export function AssetBadge({ symbol, image, size = 38 }: { symbol: string; image
 }
 
 function CoinRowBase({ symbol, name, image, price, change24h, rank, divider, onPress }: CoinRowProps) {
+  const has = change24h !== null && Number.isFinite(change24h);
   const positive = (change24h ?? 0) >= 0;
+  const color = !has ? Colors.textTertiary : positive ? Colors.accent : Colors.red;
+  const abs = has ? price - price / (1 + (change24h as number) / 100) : null;
   return (
     <Pressable
       onPress={onPress}
@@ -53,9 +56,17 @@ function CoinRowBase({ symbol, name, image, price, change24h, rank, divider, onP
       </View>
       <View style={styles.values}>
         <Text style={styles.price}>{formatUsd(price)}</Text>
-        <Text style={[styles.change, { color: change24h === null ? Colors.textTertiary : positive ? Colors.accent : Colors.red }]}>
-          {formatPct(change24h)}
-        </Text>
+        <View style={styles.changeRow}>
+          {abs !== null ? <Text style={[styles.changeAbs, { color }]}>{formatSignedNumber(abs)}</Text> : null}
+          <View
+            style={[
+              styles.changeBadge,
+              { backgroundColor: !has ? 'transparent' : positive ? 'rgba(0,217,100,0.16)' : 'rgba(255,68,68,0.16)' },
+            ]}
+          >
+            <Text style={[styles.change, { color }]}>{formatPct(change24h)}</Text>
+          </View>
+        </View>
       </View>
     </Pressable>
   );
@@ -94,5 +105,8 @@ const styles = StyleSheet.create({
   name: { color: Colors.textTertiary, fontSize: 12 },
   values: { alignItems: 'flex-end', marginLeft: 12 },
   price: { color: Colors.text, fontSize: 14, fontWeight: '600', marginBottom: 4 },
+  changeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  changeAbs: { fontSize: 12, fontWeight: '500' },
+  changeBadge: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5 },
   change: { fontSize: 12, fontWeight: '700' },
 });

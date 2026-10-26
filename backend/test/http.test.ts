@@ -25,3 +25,18 @@ test('coin ids are validated, deduped and sorted', () => {
   assert.throws(() => parseCoinIds('bit coin'), HttpError);
   assert.throws(() => parseCoinIds('../x'), HttpError);
 });
+
+import { cleanDescription, parseCoinId, parseDays } from '../lib/coingecko.js';
+
+test('coin id, chart days and description helpers', () => {
+  assert.equal(parseCoinId(' Bitcoin '), 'bitcoin');
+  assert.throws(() => parseCoinId('bit/coin'), HttpError);
+  assert.equal(parseDays('30', 'line'), 30);
+  assert.equal(parseDays('298', 'line'), 298);
+  assert.throws(() => parseDays('298', 'candle'), HttpError);
+  assert.throws(() => parseDays('400', 'line'), HttpError);
+  assert.equal(
+    cleanDescription('<p>Bitcoin is <a href="x">the first</a> &amp; best.</p><p>Second.</p>'),
+    'Bitcoin is the first & best.\n\nSecond.',
+  );
+});

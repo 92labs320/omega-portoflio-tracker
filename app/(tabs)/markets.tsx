@@ -4,6 +4,7 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,44 +16,111 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CoinRow } from '@/components/CoinRow';
 import { Colors, Typography } from '@/constants/Colors';
-import { formatTime } from '@/lib/format';
+import { formatCompactUsd, formatTime } from '@/lib/format';
 import { useMarkets } from '@/hooks/useMarkets';
 import type { CoinMarket } from '@/services/marketService';
+import { useWatchlistStore } from '@/store/watchlistStore';
+
+type Filter = 'all' | 'following' | 'gainers' | 'losers';
+const FILTERS: { id: Filter; label: string; icon?: React.ComponentProps<typeof MaterialCommunityIcons>['name'] }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'following', label: 'Following', icon: 'star' },
+  { id: 'gainers', label: 'Top gainers', icon: 'trending-up' },
+  { id: 'losers', label: 'Top losers', icon: 'trending-down' },
+];
 
 export default function MarketsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { coins, loading, error, updatedAt, refresh } = useMarkets();
+  const followed = useWatchlistStore((s) => s.ids);
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<Filter>('all');
 
-  const filtered = useMemo(() => {
+  const totals = useMemo(() => {
+    const cap = coins.reduce((s, c) => s + (c.market_cap || 0), 0);
+    const vol = coins.reduce((s, c) => s + (c.total_volume || 0), 0);
+    const btc = coins.find((c) => c.id === 'bitcoin');
+    return { cap, vol, btcDom: btc && cap > 0 ? (btc.market_cap / cap) * 100 : null };
+  }, [coins]);
+
+  const list = useMemo(() => {
+    let out = coins.map((c, i) => ({ coin: c, rank: i + 1 }));
     const q = query.trim().toUpperCase();
-    if (!q) return coins;
-    return coins.filter((c) => c.symbol.toUpperCase().includes(q) || c.name.toUpperCase().includes(q));
-  }, [coins, query]);
+    if (q) out = out.filter(({ coin }) => coin.symbol.toUpperCase().includes(q) || coin.name.toUpperCase().includes(q));
+    if (filter === 'following') out = out.filter(({ coin }) => followed.includes(coin.id));
+    if (filter === 'gainers' || filter === 'losers') {
+      out = out
+        .filter(({ coin }) => coin.price_change_percentage_24h !== null)
+        .sort((a, b) =>
+          filter === 'gainers'
+            ? (b.coin.price_change_percentage_24h ?? 0) - (a.coin.price_change_percentage_24h ?? 0)
+            : (a.coin.price_change_percentage_24h ?? 0) - (b.coin.price_change_percentage_24h ?? 0),
+        )
+        .slice(0, 50);
+    }
+    return out;
+  }, [coins, query, filter, followed]);
 
-  const renderItem = ({ item, index }: { item: CoinMarket; index: number }) => (
+  const open = (c: CoinMarket) => router.push({ pathname: '/asset/[key]', params: { key: `crypto:${c.id}` } });
+
+  const renderItem = ({ item }: { item: { coin: CoinMarket; rank: number } }) => (
     <CoinRow
-      rank={index + 1}
-      symbol={item.symbol}
-      name={item.name}
-      image={item.image}
-      price={item.current_price}
-      change24h={item.price_change_percentage_24h}
+      rank={item.rank}
+      symbol={item.coin.symbol}
+      name={item.coin.name}
+      image={item.coin.image}
+      price={item.coin.current_price}
+      change24h={item.coin.price_change_percentage_24h}
       divider
-      onPress={() =>
-        router.push({
-          pathname: '/add-transaction/form',
-          params: {
-            category: 'crypto',
-            type: 'buy',
-            assetId: item.id,
-            symbol: item.symbol.toUpperCase(),
-            name: item.name,
-          },
-        })
-      }
+      onPress={() => open(item.coin)}
     />
+  );
+
+  const header = (
+    <>
+      {coins.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Market cap · top 250</Text>
+            <Text style={styles.statValue}>{formatCompactUsd(totals.cap)}</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Volume 24h</Text>
+            <Text style={styles.statValue}>{formatCompactUsd(totals.vol)}</Text>
+          </View>
+          {totals.btcDom !== null && (
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>BTC dominance</Text>
+              <Text style={styles.statValue}>{totals.btcDom.toFixed(1)}%</Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+        {FILTERS.map((f) => (
+          <Pressable
+            key={f.id}
+            onPress={() => setFilter(f.id)}
+            style={[styles.filterChip, filter === f.id && styles.filterChipOn]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: filter === f.id }}
+          >
+            {f.icon ? (
+              <MaterialCommunityIcons
+                name={f.icon}
+                size={14}
+                color={filter === f.id ? Colors.background : f.id === 'following' ? Colors.orange : Colors.textSecondary}
+              />
+            ) : null}
+            <Text style={[styles.filterText, filter === f.id && styles.filterTextOn]}>
+              {f.label}
+              {f.id === 'following' && followed.length ? ` (${followed.length})` : ''}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </>
   );
 
   return (
@@ -64,7 +132,7 @@ export default function MarketsScreen() {
             ? coins.length
               ? `Offline · last update ${formatTime(updatedAt)}`
               : 'Live prices unavailable'
-            : `Top 250 crypto by market cap · ${updatedAt ? `updated ${formatTime(updatedAt)}` : 'loading…'}`}
+            : `Top 250 crypto · ${updatedAt ? `updated ${formatTime(updatedAt)}` : 'loading…'} · CoinGecko`}
         </Text>
       </View>
 
@@ -98,18 +166,34 @@ export default function MarketsScreen() {
         </View>
       ) : (
         <FlatList
-          data={filtered}
+          data={list}
           renderItem={renderItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.coin.id}
+          ListHeaderComponent={header}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.list}
+          initialNumToRender={15}
+          windowSize={10}
           refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={Colors.accent} />}
           ListEmptyComponent={
-            <Text style={styles.noMatch}>No coin matches "{query}" in the top 250.</Text>
+            <View style={styles.emptyList}>
+              {filter === 'following' && !query ? (
+                <>
+                  <MaterialCommunityIcons name="star-outline" size={30} color={Colors.textTertiary} />
+                  <Text style={styles.noMatch}>
+                    No followed assets yet. Open a coin and tap the star to follow it.
+                  </Text>
+                </>
+              ) : (
+                <Text style={styles.noMatch}>No coin matches "{query}" in the top 250.</Text>
+              )}
+            </View>
           }
           ListFooterComponent={
-            <Text style={styles.footer}>Market data provided by CoinGecko. Tap a coin to record a transaction.</Text>
+            list.length ? (
+              <Text style={styles.footer}>Market data provided by CoinGecko. Tap a coin for charts and details.</Text>
+            ) : null
           }
         />
       )}
@@ -126,7 +210,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 4,
     paddingHorizontal: 12,
     height: 44,
     backgroundColor: Colors.card,
@@ -136,24 +220,40 @@ const styles = StyleSheet.create({
   },
   searchIcon: { marginRight: 8 },
   searchInput: { flex: 1, color: Colors.text, fontSize: 16 },
+  statsRow: { paddingHorizontal: 16, paddingTop: 12, gap: 10 },
+  statCard: {
+    minWidth: 130,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: Colors.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  statLabel: { color: Colors.textTertiary, fontSize: 11, marginBottom: 4 },
+  statValue: { color: Colors.text, fontSize: 17, fontWeight: '800' },
+  filters: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  filterChipOn: { backgroundColor: Colors.text, borderColor: Colors.text },
+  filterText: { color: Colors.textSecondary, fontSize: 13, fontWeight: '700' },
+  filterTextOn: { color: Colors.background },
   list: { paddingBottom: 32 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   emptyTitle: { color: Colors.text, fontSize: 17, fontWeight: '700', marginTop: 12 },
   emptyText: { color: Colors.textSecondary, fontSize: 13, textAlign: 'center', marginTop: 6 },
-  retryBtn: {
-    marginTop: 16,
-    paddingHorizontal: 22,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: Colors.accent,
-  },
+  retryBtn: { marginTop: 16, paddingHorizontal: 22, paddingVertical: 10, borderRadius: 20, backgroundColor: Colors.accent },
   retryText: { color: Colors.background, fontWeight: '700', fontSize: 14 },
-  noMatch: { color: Colors.textSecondary, textAlign: 'center', marginTop: 32, paddingHorizontal: 24 },
-  footer: {
-    color: Colors.textTertiary,
-    fontSize: 11,
-    textAlign: 'center',
-    marginTop: 18,
-    paddingHorizontal: 24,
-  },
+  emptyList: { alignItems: 'center', marginTop: 32, paddingHorizontal: 32, gap: 10 },
+  noMatch: { color: Colors.textSecondary, textAlign: 'center' },
+  footer: { color: Colors.textTertiary, fontSize: 11, textAlign: 'center', marginTop: 18, paddingHorizontal: 24 },
 });

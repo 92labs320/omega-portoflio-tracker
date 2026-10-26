@@ -84,3 +84,28 @@ export const TYPE_LABELS: Record<string, string> = {
   reward: 'Reward',
   airdrop: 'Airdrop',
 };
+
+/** Compact USD for large figures: $1.59T, $35.2B, $812.4M. */
+export function formatCompactUsd(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  return value.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    notation: 'compact',
+    maximumFractionDigits: 2,
+  });
+}
+
+export function formatCompactNumber(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  return value.toLocaleString('en-US', { notation: 'compact', maximumFractionDigits: 2 });
+}
+
+/** Signed USD change, e.g. "+1,234.56" or "−12.30" (no currency symbol, like Delta). */
+export function formatSignedNumber(value: number): string {
+  if (!Number.isFinite(value)) return '—';
+  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
+  const abs = Math.abs(value);
+  const digits = abs > 0 && abs < 1 ? 4 : 2;
+  return `${sign}${abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: digits })}`;
+}

@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Colors } from '@/constants/Colors';
 import { isSyncEnabled } from '@/lib/sync';
 import { usePortfolioStore } from '@/store/portfolioStore';
+import { useWatchlistStore } from '@/store/watchlistStore';
 
 export default function RootLayout() {
   const load = usePortfolioStore((s) => s.load);
@@ -12,6 +13,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     (async () => {
+      useWatchlistStore.getState().load().catch(() => {});
       try {
         await load();
       } catch (e) {
