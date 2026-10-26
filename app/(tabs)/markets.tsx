@@ -1,7 +1,8 @@
-﻿import React, { useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -18,7 +19,7 @@ import { CoinRow } from '@/components/CoinRow';
 import { Colors, Typography } from '@/constants/Colors';
 import { formatCompactUsd, formatTime } from '@/lib/format';
 import { useMarkets } from '@/hooks/useMarkets';
-import type { CoinMarket } from '@/services/marketService';
+import { searchCoins, type CoinMarket, type CoinSearchResult } from '@/services/marketService';
 import { useWatchlistStore } from '@/store/watchlistStore';
 
 type Filter = 'all' | 'following' | 'gainers' | 'losers';
@@ -36,6 +37,28 @@ export default function MarketsScreen() {
   const followed = useWatchlistStore((s) => s.ids);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  const [more, setMore] = useState<CoinSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const seq = useRef(0);
+
+  // Search every coin listed on CoinGecko (not just the top 250) once 2+ characters are typed.
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setMore([]);
+      setSearching(false);
+      return;
+    }
+    const id = ++seq.current;
+    setSearching(true);
+    const t = setTimeout(() => {
+      searchCoins(q)
+        .then((r) => id === seq.current && setMore(r))
+        .catch(() => id === seq.current && setMore([]))
+        .finally(() => id === seq.current && setSearching(false));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [query]);
 
   const totals = useMemo(() => {
     const cap = coins.reduce((s, c) => s + (c.market_cap || 0), 0);
@@ -62,7 +85,43 @@ export default function MarketsScreen() {
     return out;
   }, [coins, query, filter, followed]);
 
-  const open = (c: CoinMarket) => router.push({ pathname: '/asset/[key]', params: { key: `crypto:${c.id}` } });
+  const open = (c: { id: string }) => router.push({ pathname: '/asset/[key]', params: { key: `crypto:${c.id}` } });
+
+  const inList = useMemo(() => new Set(list.map((x) => x.coin.id)), [list]);
+  const extra = filter === 'all' ? more.filter((c) => !inList.has(c.id)) : [];
+
+  const moreSection =
+    query.trim().length >= 2 && filter === 'all' ? (
+      <View style={styles.moreSection}>
+        <View style={styles.moreHeader}>
+          <Text style={styles.moreTitle}>All coins</Text>
+          {searching ? <ActivityIndicator size="small" color={Colors.accent} /> : null}
+        </View>
+        {extra.length === 0 && !searching ? (
+          <Text style={styles.moreEmpty}>
+            {list.length ? 'No other matches outside the top 250.' : `No coin found for "${query.trim()}".`}
+          </Text>
+        ) : (
+          extra.map((c) => (
+            <Pressable
+              key={c.id}
+              onPress={() => open(c)}
+              style={({ pressed }) => [styles.moreRow, pressed && { opacity: 0.6 }]}
+              accessibilityRole="button"
+            >
+              {c.thumb ? <Image source={{ uri: c.thumb }} style={styles.moreThumb} /> : <View style={styles.moreThumb} />}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.moreSymbol}>{c.symbol.toUpperCase()}</Text>
+                <Text style={styles.moreName} numberOfLines={1}>
+                  {c.name}
+                </Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={Colors.textTertiary} />
+            </Pressable>
+          ))
+        )}
+      </View>
+    ) : null;
 
   const renderItem = ({ item }: { item: { coin: CoinMarket; rank: number } }) => (
     <CoinRow
@@ -140,7 +199,7 @@ export default function MarketsScreen() {
         <MaterialCommunityIcons name="magnify" size={20} color={Colors.textSecondary} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search coins"
+          placeholder="Search any coin"
           placeholderTextColor={Colors.textTertiary}
           value={query}
           onChangeText={setQuery}
@@ -177,6 +236,7 @@ export default function MarketsScreen() {
           windowSize={10}
           refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={Colors.accent} />}
           ListEmptyComponent={
+            filter === 'all' && query.trim().length >= 2 ? null : (
             <View style={styles.emptyList}>
               {filter === 'following' && !query ? (
                 <>
@@ -186,14 +246,20 @@ export default function MarketsScreen() {
                   </Text>
                 </>
               ) : (
-                <Text style={styles.noMatch}>No coin matches "{query}" in the top 250.</Text>
+                <Text style={styles.noMatch}>No coin matches "{query}".</Text>
               )}
             </View>
+            )
           }
           ListFooterComponent={
-            list.length ? (
-              <Text style={styles.footer}>Market data provided by CoinGecko. Tap a coin for charts and details.</Text>
-            ) : null
+            <>
+              {moreSection}
+              {list.length || extra.length ? (
+                <Text style={styles.footer}>
+                  Market data provided by CoinGecko. Search finds any listed coin. Tap a coin for charts and details.
+                </Text>
+              ) : null}
+            </>
           }
         />
       )}
@@ -255,5 +321,19 @@ const styles = StyleSheet.create({
   retryText: { color: Colors.background, fontWeight: '700', fontSize: 14 },
   emptyList: { alignItems: 'center', marginTop: 32, paddingHorizontal: 32, gap: 10 },
   noMatch: { color: Colors.textSecondary, textAlign: 'center' },
+  moreSection: { marginTop: 18, paddingHorizontal: 16 },
+  moreHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  moreTitle: { color: Colors.text, fontSize: 17, fontWeight: '800' },
+  moreEmpty: { color: Colors.textTertiary, fontSize: 13, paddingVertical: 8 },
+  moreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 11,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.borderLight,
+  },
+  moreThumb: { width: 30, height: 30, borderRadius: 15, marginRight: 12, backgroundColor: 'rgba(255,255,255,0.06)' },
+  moreSymbol: { color: Colors.text, fontSize: 15, fontWeight: '700' },
+  moreName: { color: Colors.textTertiary, fontSize: 12, marginTop: 2 },
   footer: { color: Colors.textTertiary, fontSize: 11, textAlign: 'center', marginTop: 18, paddingHorizontal: 24 },
 });
