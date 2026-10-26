@@ -182,7 +182,11 @@ export default function AssetDetailScreen() {
   const shownPrice = scrub ? scrub.v : livePrice;
   let rangeAbs: number | null = null;
   let rangePct: number | null = null;
-  if (shownPrice !== null && firstValue) {
+  if (!scrub && range === '1D' && liveChange24h !== null && livePrice !== null) {
+    // Same 24h figure as Markets and Performance, so numbers never disagree across screens.
+    rangePct = liveChange24h;
+    rangeAbs = livePrice - livePrice / (1 + liveChange24h / 100);
+  } else if (shownPrice !== null && firstValue) {
     rangeAbs = shownPrice - firstValue;
     rangePct = (rangeAbs / firstValue) * 100;
   } else if (!scrub && range === '1D' && liveChange24h !== null && livePrice !== null) {
