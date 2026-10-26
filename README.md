@@ -138,3 +138,17 @@ Tout est dans [`docs/APP_STORE.md`](docs/APP_STORE.md) : description, mots-clés
 - AdMob est retiré de la V1. Le SDK sans App ID configuré fait planter iOS au lancement, et son retrait évite l'invite ATT et alourdit moins la fiche App Privacy. À réintégrer en 1.1 si besoin.
 - NativeWind est retiré : il n'était utilisé que par du code mort, et `babel.config.js` revient au preset Expo seul.
 - Icône et splash Omega remplacent les placeholders Expo.
+
+## Tester les modifications sans passer par l'App Store (development build)
+
+Une seule installation, puis chaque modification du code apparaît instantanément sur l'iPhone.
+
+1. Enregistrer l'iPhone (une fois) : `eas device:create` → ouvrir le lien sur l'iPhone → installer le profil.
+2. Construire l'app de développement (une fois, ou après l'ajout d'un module natif) :
+   `eas build --platform ios --profile development`
+   → ouvrir le lien affiché sur l'iPhone et installer « Omega Portfolio Tracker (dev) ».
+3. À chaque session : `git pull origin expo-app` puis `npx expo start --dev-client`
+   → ouvrir l'app de dev sur l'iPhone, elle se connecte au PC (même Wi-Fi). En cas de souci réseau : `npx expo start --dev-client --tunnel`.
+4. Les changements de code se rechargent tout seuls ; secouer l'iPhone ouvre le menu (Reload).
+
+Un nouveau build TestFlight/App Store n'est nécessaire que pour publier.
