@@ -19,3 +19,14 @@ test('date input round-trip and validation', () => {
   assert.equal(fromDateInput('2026-02-30'), null);
   assert.equal(fromDateInput('28/02/2026'), null);
 });
+
+import { formatCompactNumber, formatCompactUsd } from '../lib/format';
+
+test('compact formatting does not rely on Intl compact notation', () => {
+  assert.equal(formatCompactUsd(2_742_475_833_190), '$2.74T');
+  assert.equal(formatCompactUsd(117_924_356_577), '$117.9B');
+  assert.equal(formatCompactUsd(812_400_000), '$812.4M');
+  assert.equal(formatCompactUsd(950), '$950');
+  assert.equal(formatCompactNumber(19_950_000), '19.95M');
+  assert.equal(formatCompactUsd(null), '—');
+});

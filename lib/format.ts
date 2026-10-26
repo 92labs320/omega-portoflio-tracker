@@ -1,14 +1,7 @@
 export function formatUsd(value: number, opts: { compact?: boolean } = {}): string {
   if (!Number.isFinite(value)) return '—';
   const abs = Math.abs(value);
-  if (opts.compact && abs >= 1e6) {
-    return value.toLocaleString('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      notation: 'compact',
-      maximumFractionDigits: 2,
-    });
-  }
+  if (opts.compact && abs >= 1e6) return formatCompactUsd(value);
   const digits = abs > 0 && abs < 1 ? (abs < 0.01 ? 6 : 4) : 2;
   return value.toLocaleString('en-US', {
     style: 'currency',
@@ -85,20 +78,37 @@ export const TYPE_LABELS: Record<string, string> = {
   airdrop: 'Airdrop',
 };
 
+/**
+ * Compact figures: 1.59T, 35.2B, 812.4M, 12.3K.
+ * Done by hand because Hermes (React Native) ignores Intl `notation: 'compact'`.
+ */
+function compact(value: number): string {
+  const abs = Math.abs(value);
+  const units: [number, string][] = [
+    [1e12, 'T'],
+    [1e9, 'B'],
+    [1e6, 'M'],
+    [1e3, 'K'],
+  ];
+  for (const [n, u] of units) {
+    if (abs >= n) {
+      const v = value / n;
+      const digits = Math.abs(v) >= 100 ? 1 : 2;
+      return `${v.toLocaleString('en-US', { maximumFractionDigits: digits })}${u}`;
+    }
+  }
+  return value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
 /** Compact USD for large figures: $1.59T, $35.2B, $812.4M. */
 export function formatCompactUsd(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
-  return value.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    notation: 'compact',
-    maximumFractionDigits: 2,
-  });
+  return `${value < 0 ? '−' : ''}$${compact(Math.abs(value))}`;
 }
 
 export function formatCompactNumber(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
-  return value.toLocaleString('en-US', { notation: 'compact', maximumFractionDigits: 2 });
+  return compact(value);
 }
 
 /** Signed USD change, e.g. "+1,234.56" or "−12.30" (no currency symbol, like Delta). */
