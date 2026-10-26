@@ -129,3 +129,18 @@ test('symbol parsing', () => {
   assert.throws(() => parseSymbols(''), HttpError);
   assert.throws(() => parseSymbols('AAPL;DROP'), HttpError);
 });
+
+test('v2 fields round-trip and are optional', async () => {
+  const a = owner(secret());
+  const legacy = change();
+  const v2 = change({ exchangeId: 'binance', pair: 'BTC/USDT', quoteCurrency: 'USDT', priceQuote: 60012.5, feeQuote: 0.6 });
+  const r = await sync(db, a, { changes: [legacy, v2] });
+  const l = r.rows.find((x) => x.id === legacy.id)!;
+  const n = r.rows.find((x) => x.id === v2.id)!;
+  assert.equal(l.quoteCurrency, 'USD');
+  assert.equal(l.priceQuote, null);
+  assert.equal(n.exchangeId, 'binance');
+  assert.equal(n.pair, 'BTC/USDT');
+  assert.equal(n.priceQuote, 60012.5);
+  assert.equal(n.feeQuote, 0.6);
+});

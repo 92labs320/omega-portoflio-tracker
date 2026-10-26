@@ -24,6 +24,8 @@ import {
   formatDate,
   formatPct,
   formatQty,
+  formatShortDateTime,
+  toInputNumber,
   formatSignedNumber,
   formatSignedUsd,
   formatTime,
@@ -533,9 +535,12 @@ export default function AssetDetailScreen() {
                         {TYPE_LABELS[tx.type]} · {formatQty(tx.quantity)}
                       </Text>
                       <Text style={styles.txMeta}>
-                        {formatDate(tx.executedAt)} · {formatUsd(tx.priceUsd)}
-                        {tx.feeUsd ? ` · fee ${formatUsd(tx.feeUsd)}` : ''}
+                        {formatShortDateTime(Date.parse(tx.executedAt))} ·{' '}
+                        {tx.priceQuote !== null && tx.quoteCurrency !== 'USD'
+                          ? `${toInputNumber(tx.priceQuote)} ${tx.quoteCurrency}`
+                          : formatUsd(tx.priceUsd)}
                         {tx.exchange ? ` · ${tx.exchange}` : ''}
+                        {tx.pair ? ` · ${tx.pair}` : ''}
                       </Text>
                     </View>
                     <Text style={styles.txTotal}>{formatUsd(tx.quantity * tx.priceUsd)}</Text>

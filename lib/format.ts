@@ -119,3 +119,33 @@ export function formatSignedNumber(value: number): string {
   const digits = abs > 0 && abs < 1 ? 4 : 2;
   return `${sign}${abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: digits })}`;
 }
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export const MONTHS_LONG = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** "Mon, 26 Oct 2026, 19:26" in local time (manual: no Intl dependency). */
+export function formatTradeDate(ts: number): string {
+  const d = new Date(ts);
+  return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/** "26 Oct, 10:00" */
+export function formatShortDateTime(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}, ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/** Plain number for inputs: up to 8 significant decimals, no grouping. */
+export function toInputNumber(v: number): string {
+  if (!Number.isFinite(v)) return '';
+  if (v === 0) return '0';
+  const abs = Math.abs(v);
+  const digits = abs >= 1000 ? 2 : abs >= 1 ? 4 : Math.min(10, 2 - Math.floor(Math.log10(abs)) + 4);
+  return String(Number(v.toFixed(digits)));
+}

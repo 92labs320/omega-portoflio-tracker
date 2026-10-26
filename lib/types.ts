@@ -38,6 +38,15 @@ export interface Transaction {
   /** ISO date-time of the last local modification (last-write-wins sync). */
   updatedAt: string;
   deleted: boolean;
+  /** CoinGecko exchange identifier ('binance', 'mxc'...) or '' / 'global'. */
+  exchangeId: string;
+  /** Trading pair as shown to the user, e.g. "RIO/USDT". */
+  pair: string;
+  /** Currency the price/fee were entered in (USDT, EUR, BTC...). */
+  quoteCurrency: string;
+  /** Price per coin in quoteCurrency (priceUsd is the USD equivalent used for P&L). */
+  priceQuote: number | null;
+  feeQuote: number | null;
 }
 
 export type TransactionInput = Omit<

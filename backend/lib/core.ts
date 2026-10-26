@@ -45,6 +45,40 @@ export interface ClientTransaction {
   executedAt: string;
   updatedAt: string;
   deleted: boolean;
+  /** Where/how it was traded (added in v2, optional for older clients). */
+  exchangeId: string;
+  pair: string;
+  quoteCurrency: string;
+  priceQuote: number | null;
+  feeQuote: number | null;
+}
+
+/** Idempotent column additions for v2 (trading pair & quote currency). */
+export const SCHEMA_V2 = [
+  "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS exchange_id TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS pair TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS quote_currency TEXT NOT NULL DEFAULT 'USD'",
+  'ALTER TABLE transactions ADD COLUMN IF NOT EXISTS price_quote DOUBLE PRECISION',
+  'ALTER TABLE transactions ADD COLUMN IF NOT EXISTS fee_quote DOUBLE PRECISION',
+];
+
+let schemaReady: Promise<void> | null = null;
+/** Runs the v2 column additions once per server instance (cheap no-op once applied). */
+export function ensureSchema(db: Db): Promise<void> {
+  if (!schemaReady) {
+    schemaReady = (async () => {
+      for (const stmt of SCHEMA_V2) await db.query(stmt);
+    })().catch((e) => {
+      schemaReady = null;
+      throw e;
+    });
+  }
+  return schemaReady;
+}
+
+function optNum(v: unknown, field: string): number | null {
+  if (v === undefined || v === null) return null;
+  return num(v, field);
 }
 
 function str(v: unknown, field: string, max: number, required = true): string {
@@ -99,6 +133,11 @@ export function validateChange(raw: unknown): ClientTransaction {
     executedAt: isoDate(r.executedAt, 'executedAt'),
     updatedAt: isoDate(r.updatedAt, 'updatedAt'),
     deleted: r.deleted === true,
+    exchangeId: str(r.exchangeId, 'exchangeId', 60, false),
+    pair: str(r.pair, 'pair', 40, false),
+    quoteCurrency: str(r.quoteCurrency, 'quoteCurrency', 15, false) || 'USD',
+    priceQuote: optNum(r.priceQuote, 'priceQuote'),
+    feeQuote: optNum(r.feeQuote, 'feeQuote'),
   };
 }
 
@@ -118,6 +157,11 @@ interface Row {
   updated_at: string | Date;
   deleted: boolean;
   server_seq: string | number;
+  exchange_id: string | null;
+  pair: string | null;
+  quote_currency: string | null;
+  price_quote: number | null;
+  fee_quote: number | null;
 }
 
 const toIso = (v: string | Date) => (v instanceof Date ? v : new Date(v)).toISOString();
@@ -138,6 +182,11 @@ function fromRow(r: Row): ClientTransaction {
     executedAt: toIso(r.executed_at),
     updatedAt: toIso(r.updated_at),
     deleted: r.deleted,
+    exchangeId: r.exchange_id ?? '',
+    pair: r.pair ?? '',
+    quoteCurrency: r.quote_currency ?? 'USD',
+    priceQuote: r.price_quote === null || r.price_quote === undefined ? null : Number(r.price_quote),
+    feeQuote: r.fee_quote === null || r.fee_quote === undefined ? null : Number(r.fee_quote),
   };
 }
 
@@ -164,6 +213,7 @@ export async function sync(db: Db, owner: string, body: unknown): Promise<SyncRe
   if (!Array.isArray(rawChanges)) throw new HttpError(400, 'changes must be an array');
   if (rawChanges.length > MAX_CHANGES) throw new HttpError(413, `At most ${MAX_CHANGES} changes per request`);
   const changes = rawChanges.map(validateChange);
+  await ensureSchema(db);
 
   if (changes.length > 0) {
     const payload = changes.map((c) => ({
@@ -181,23 +231,34 @@ export async function sync(db: Db, owner: string, body: unknown): Promise<SyncRe
       executed_at: c.executedAt,
       updated_at: c.updatedAt,
       deleted: c.deleted,
+      exchange_id: c.exchangeId,
+      pair: c.pair,
+      quote_currency: c.quoteCurrency,
+      price_quote: c.priceQuote,
+      fee_quote: c.feeQuote,
     }));
     await db.query(
       `INSERT INTO transactions
          (owner_hash, id, asset_id, symbol, name, category, type, quantity, price_usd, fee_usd,
-          exchange, notes, executed_at, updated_at, deleted)
+          exchange, notes, executed_at, updated_at, deleted,
+          exchange_id, pair, quote_currency, price_quote, fee_quote)
        SELECT $1, r.id, r.asset_id, r.symbol, r.name, r.category, r.type, r.quantity, r.price_usd,
-              r.fee_usd, r.exchange, r.notes, r.executed_at, r.updated_at, r.deleted
+              r.fee_usd, r.exchange, r.notes, r.executed_at, r.updated_at, r.deleted,
+              r.exchange_id, r.pair, r.quote_currency, r.price_quote, r.fee_quote
        FROM jsonb_to_recordset($2::jsonb) AS r(
          id uuid, asset_id text, symbol text, name text, category text, type text,
          quantity double precision, price_usd double precision, fee_usd double precision,
-         exchange text, notes text, executed_at timestamptz, updated_at timestamptz, deleted boolean)
+         exchange text, notes text, executed_at timestamptz, updated_at timestamptz, deleted boolean,
+         exchange_id text, pair text, quote_currency text, price_quote double precision,
+         fee_quote double precision)
        ON CONFLICT (owner_hash, id) DO UPDATE SET
          asset_id = EXCLUDED.asset_id, symbol = EXCLUDED.symbol, name = EXCLUDED.name,
          category = EXCLUDED.category, type = EXCLUDED.type, quantity = EXCLUDED.quantity,
          price_usd = EXCLUDED.price_usd, fee_usd = EXCLUDED.fee_usd, exchange = EXCLUDED.exchange,
          notes = EXCLUDED.notes, executed_at = EXCLUDED.executed_at, updated_at = EXCLUDED.updated_at,
-         deleted = EXCLUDED.deleted, server_seq = nextval('tx_seq'), received_at = now()
+         deleted = EXCLUDED.deleted, exchange_id = EXCLUDED.exchange_id, pair = EXCLUDED.pair,
+         quote_currency = EXCLUDED.quote_currency, price_quote = EXCLUDED.price_quote,
+         fee_quote = EXCLUDED.fee_quote, server_seq = nextval('tx_seq'), received_at = now()
        WHERE transactions.updated_at < EXCLUDED.updated_at`,
       [owner, JSON.stringify(payload)],
     );
@@ -205,7 +266,8 @@ export async function sync(db: Db, owner: string, body: unknown): Promise<SyncRe
 
   const rows = await db.query<Row>(
     `SELECT id, asset_id, symbol, name, category, type, quantity, price_usd, fee_usd, exchange, notes,
-            executed_at, updated_at, deleted, server_seq
+            executed_at, updated_at, deleted, server_seq,
+            exchange_id, pair, quote_currency, price_quote, fee_quote
        FROM transactions
       WHERE owner_hash = $1 AND server_seq > $2
       ORDER BY server_seq ASC

@@ -24,3 +24,10 @@ CREATE TABLE IF NOT EXISTS transactions (
 );
 
 CREATE INDEX IF NOT EXISTS transactions_owner_seq_idx ON transactions (owner_hash, server_seq);
+
+-- v2: trading venue, pair and quote currency (idempotent)
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS exchange_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS pair TEXT NOT NULL DEFAULT '';
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS quote_currency TEXT NOT NULL DEFAULT 'USD';
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS price_quote DOUBLE PRECISION;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS fee_quote DOUBLE PRECISION;

@@ -33,7 +33,7 @@ export default function SelectCategoryScreen() {
 
   const handleSelectCategory = (categoryId: string) => {
     router.push({
-      pathname: '/add-transaction/select-type',
+      pathname: '/add-transaction/form',
       params: { category: categoryId },
     });
   };

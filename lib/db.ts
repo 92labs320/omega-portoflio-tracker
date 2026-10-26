@@ -15,7 +15,7 @@ import type {
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 async function migrate(db: SQLite.SQLiteDatabase) {
   await db.execAsync('PRAGMA journal_mode = WAL;');
@@ -47,6 +47,16 @@ async function migrate(db: SQLite.SQLiteDatabase) {
         key   TEXT PRIMARY KEY NOT NULL,
         value TEXT NOT NULL
       );
+    `);
+  }
+
+  if (current < 2) {
+    await db.execAsync(`
+      ALTER TABLE transactions ADD COLUMN exchange_id TEXT NOT NULL DEFAULT '';
+      ALTER TABLE transactions ADD COLUMN pair TEXT NOT NULL DEFAULT '';
+      ALTER TABLE transactions ADD COLUMN quote_currency TEXT NOT NULL DEFAULT 'USD';
+      ALTER TABLE transactions ADD COLUMN price_quote REAL;
+      ALTER TABLE transactions ADD COLUMN fee_quote REAL;
     `);
   }
 
@@ -85,6 +95,11 @@ interface TxRow {
   updated_at: string;
   deleted: number;
   dirty: number;
+  exchange_id: string | null;
+  pair: string | null;
+  quote_currency: string | null;
+  price_quote: number | null;
+  fee_quote: number | null;
 }
 
 function fromRow(r: TxRow): Transaction {
@@ -103,6 +118,11 @@ function fromRow(r: TxRow): Transaction {
     executedAt: r.executed_at,
     updatedAt: r.updated_at,
     deleted: r.deleted === 1,
+    exchangeId: r.exchange_id ?? '',
+    pair: r.pair ?? '',
+    quoteCurrency: r.quote_currency ?? 'USD',
+    priceQuote: r.price_quote ?? null,
+    feeQuote: r.fee_quote ?? null,
   };
 }
 
@@ -111,15 +131,19 @@ async function upsert(tx: Transaction, dirty: boolean) {
   await db.runAsync(
     `INSERT INTO transactions
       (id, asset_id, symbol, name, category, type, quantity, price_usd, fee_usd,
-       exchange, notes, executed_at, updated_at, deleted, dirty)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       exchange, notes, executed_at, updated_at, deleted, dirty,
+       exchange_id, pair, quote_currency, price_quote, fee_quote)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        asset_id = excluded.asset_id, symbol = excluded.symbol, name = excluded.name,
        category = excluded.category, type = excluded.type, quantity = excluded.quantity,
        price_usd = excluded.price_usd, fee_usd = excluded.fee_usd,
        exchange = excluded.exchange, notes = excluded.notes,
        executed_at = excluded.executed_at, updated_at = excluded.updated_at,
-       deleted = excluded.deleted, dirty = excluded.dirty`,
+       deleted = excluded.deleted, dirty = excluded.dirty,
+       exchange_id = excluded.exchange_id, pair = excluded.pair,
+       quote_currency = excluded.quote_currency, price_quote = excluded.price_quote,
+       fee_quote = excluded.fee_quote`,
     [
       tx.id,
       tx.assetId,
@@ -136,6 +160,11 @@ async function upsert(tx: Transaction, dirty: boolean) {
       tx.updatedAt,
       tx.deleted ? 1 : 0,
       dirty ? 1 : 0,
+      tx.exchangeId ?? '',
+      tx.pair ?? '',
+      tx.quoteCurrency || 'USD',
+      tx.priceQuote ?? null,
+      tx.feeQuote ?? null,
     ],
   );
 }

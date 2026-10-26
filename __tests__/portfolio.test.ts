@@ -22,6 +22,11 @@ function tx(p: Partial<Transaction>): Transaction {
     executedAt: `2026-01-${String(n).padStart(2, '0')}T12:00:00.000Z`,
     updatedAt: '2026-01-01T00:00:00.000Z',
     deleted: false,
+    exchangeId: '',
+    pair: '',
+    quoteCurrency: 'USD',
+    priceQuote: null,
+    feeQuote: null,
     ...p,
   };
 }
