@@ -76,7 +76,7 @@ interface SelectedAsset {
 }
 
 const USD_LIKE = new Set(['USD', 'USDT', 'USDC', 'BUSD', 'FDUSD', 'TUSD', 'DAI', 'USDP', 'PYUSD', 'USDE', 'USD1', 'USDS']);
-const OTHER_TYPES: TransactionType[] = ['reward', 'airdrop', 'stake', 'unstake'];
+const OTHER_TYPES: TransactionType[] = ['reward', 'airdrop', 'transfer_in', 'transfer_out', 'stake', 'unstake'];
 const LAST_EXCHANGE_KEY = 'trade.lastExchange';
 const NOW_WINDOW = 3 * 60_000;
 const KB_ACCESSORY = 'tx-form-keyboard';

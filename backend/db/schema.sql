@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   symbol       TEXT        NOT NULL,
   name         TEXT        NOT NULL,
   category     TEXT        NOT NULL CHECK (category IN ('crypto', 'stock')),
-  type         TEXT        NOT NULL CHECK (type IN ('buy', 'sell', 'stake', 'unstake', 'reward', 'airdrop')),
+  type         TEXT        NOT NULL CONSTRAINT transactions_type_check CHECK (type IN ('buy', 'sell', 'stake', 'unstake', 'reward', 'airdrop', 'transfer_in', 'transfer_out')),
   quantity     DOUBLE PRECISION NOT NULL CHECK (quantity >= 0),
   price_usd    DOUBLE PRECISION NOT NULL CHECK (price_usd >= 0),
   fee_usd      DOUBLE PRECISION NOT NULL DEFAULT 0 CHECK (fee_usd >= 0),

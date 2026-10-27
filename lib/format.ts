@@ -114,6 +114,8 @@ export const TYPE_LABELS: Record<string, string> = {
   unstake: 'Unstake',
   reward: 'Reward',
   airdrop: 'Airdrop',
+  transfer_in: 'Transfer in',
+  transfer_out: 'Transfer out',
 };
 
 /**

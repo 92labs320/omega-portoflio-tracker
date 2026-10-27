@@ -188,6 +188,18 @@ export async function createTransaction(input: TransactionInput): Promise<Transa
   return tx;
 }
 
+/** Inserts many transactions in one SQLite transaction (CSV import). */
+export async function createTransactions(inputs: TransactionInput[]): Promise<number> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  await db.withTransactionAsync(async () => {
+    for (const input of inputs) {
+      await upsert({ ...input, id: Crypto.randomUUID(), updatedAt: now, deleted: false }, true);
+    }
+  });
+  return inputs.length;
+}
+
 export async function updateTransaction(
   id: string,
   input: TransactionInput,

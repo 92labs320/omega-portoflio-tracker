@@ -41,6 +41,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
         <Stack.Screen name="add-transaction" options={{ presentation: 'modal' }} />
         <Stack.Screen name="asset/[key]" />
+        <Stack.Screen name="import" options={{ presentation: 'modal' }} />
       </Stack>
     </>
   );

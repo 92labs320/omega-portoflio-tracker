@@ -73,8 +73,8 @@ export function qtyAt(txs: Transaction[], t: number): number {
   let q = 0;
   for (const tx of txs) {
     if (Date.parse(tx.executedAt) > t) break;
-    if (tx.type === 'buy' || tx.type === 'reward' || tx.type === 'airdrop') q += tx.quantity;
-    else if (tx.type === 'sell') q = Math.max(0, q - tx.quantity);
+    if (tx.type === 'buy' || tx.type === 'reward' || tx.type === 'airdrop' || tx.type === 'transfer_in') q += tx.quantity;
+    else if (tx.type === 'sell' || tx.type === 'transfer_out') q = Math.max(0, q - tx.quantity);
   }
   return q;
 }

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Typography } from '@/constants/Colors';
@@ -83,6 +83,7 @@ function toCsv(rows: ReturnType<typeof usePortfolioStore.getState>['transactions
 }
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const currencyCode = useCurrencyStore((st) => st.code);
   const insets = useSafeAreaInsets();
   const transactions = usePortfolioStore((s) => s.transactions);
@@ -245,6 +246,12 @@ export default function SettingsScreen() {
               right={busy ? <ActivityIndicator color={Colors.accent} /> : undefined}
             />
           )}
+          <Row
+            icon="file-import-outline"
+            label="Import transactions (CSV)"
+            value="From Delta"
+            onPress={() => router.push('/import')}
+          />
           <Row icon="file-delimited-outline" label="Export transactions (CSV)" onPress={exportCsv} />
           {cloud && <Row icon="cloud-remove-outline" label="Delete cloud backup" onPress={deleteCloud} destructive />}
           <Row icon="delete-outline" label="Erase data on this iPhone" onPress={eraseLocal} destructive />

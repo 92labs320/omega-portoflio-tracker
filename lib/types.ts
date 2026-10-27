@@ -6,7 +6,11 @@ export type TransactionType =
   | 'stake'
   | 'unstake'
   | 'reward'
-  | 'airdrop';
+  | 'airdrop'
+  /** Coins moved in from another wallet (adds quantity at the given cost). */
+  | 'transfer_in'
+  /** Coins moved out to another wallet (removes quantity at average cost, no P&L). */
+  | 'transfer_out';
 
 export const TRANSACTION_TYPES: TransactionType[] = [
   'buy',
@@ -15,6 +19,8 @@ export const TRANSACTION_TYPES: TransactionType[] = [
   'unstake',
   'reward',
   'airdrop',
+  'transfer_in',
+  'transfer_out',
 ];
 
 /** A transaction as stored on the device (and mirrored in Neon). */
@@ -70,4 +76,6 @@ export interface Holding {
 export interface Quote {
   price: number;
   change24h: number | null;
+  /** No live feed: price of the last recorded trade. */
+  stale?: boolean;
 }

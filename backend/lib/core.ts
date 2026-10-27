@@ -17,7 +17,7 @@ export class HttpError extends Error {
 const SECRET_RE = /^[0-9a-f]{64}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CATEGORIES = new Set(['crypto', 'stock']);
-const TYPES = new Set(['buy', 'sell', 'stake', 'unstake', 'reward', 'airdrop']);
+const TYPES = new Set(['buy', 'sell', 'stake', 'unstake', 'reward', 'airdrop', 'transfer_in', 'transfer_out']);
 
 export const MAX_CHANGES = 500;
 export const PAGE_SIZE = 1000;
@@ -62,12 +62,27 @@ export const SCHEMA_V2 = [
   'ALTER TABLE transactions ADD COLUMN IF NOT EXISTS fee_quote DOUBLE PRECISION',
 ];
 
+/** v3: transfer_in / transfer_out transaction types (CSV imports of wallet moves). */
+export const SCHEMA_V3 = [
+  `DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname = 'transactions_type_check' AND pg_get_constraintdef(oid) LIKE '%transfer_out%'
+    ) THEN
+      ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_type_check;
+      ALTER TABLE transactions ADD CONSTRAINT transactions_type_check
+        CHECK (type IN ('buy', 'sell', 'stake', 'unstake', 'reward', 'airdrop', 'transfer_in', 'transfer_out'));
+    END IF;
+  END $$`,
+];
+
 let schemaReady: Promise<void> | null = null;
 /** Runs the v2 column additions once per server instance (cheap no-op once applied). */
 export function ensureSchema(db: Db): Promise<void> {
   if (!schemaReady) {
     schemaReady = (async () => {
-      for (const stmt of SCHEMA_V2) await db.query(stmt);
+      for (const stmt of [...SCHEMA_V2, ...SCHEMA_V3]) await db.query(stmt);
     })().catch((e) => {
       schemaReady = null;
       throw e;
@@ -116,7 +131,7 @@ export function validateChange(raw: unknown): ClientTransaction {
   if (!UUID_RE.test(id)) throw new HttpError(400, 'id must be a UUID');
   const category = str(r.category, 'category', 10);
   if (!CATEGORIES.has(category)) throw new HttpError(400, 'Invalid category');
-  const type = str(r.type, 'type', 10);
+  const type = str(r.type, 'type', 20);
   if (!TYPES.has(type)) throw new HttpError(400, 'Invalid type');
   return {
     id: id.toLowerCase(),

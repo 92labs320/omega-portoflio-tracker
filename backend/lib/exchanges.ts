@@ -18,7 +18,7 @@ type Fetcher = (base: string, target: string, ts: number, interval: Interval) =>
 
 const UA = { 'User-Agent': 'omega-portfolio/1.0 (+https://omega-portoflio-tracker-backend.vercel.app)', Accept: 'application/json' };
 
-async function getJson(url: string): Promise<unknown> {
+export async function getJson(url: string): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 7000);
   try {

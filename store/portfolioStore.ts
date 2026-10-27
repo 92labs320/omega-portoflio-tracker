@@ -20,6 +20,7 @@ interface PortfolioState {
   load: () => Promise<void>;
   refreshQuotes: () => Promise<void>;
   add: (input: TransactionInput) => Promise<void>;
+  addMany: (inputs: TransactionInput[]) => Promise<number>;
   update: (id: string, input: TransactionInput) => Promise<void>;
   remove: (id: string) => Promise<void>;
   sync: () => Promise<void>;
@@ -95,6 +96,16 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => {
       } else if (stockIds.length) {
         errors.push('Stock prices unavailable');
       }
+      // Listings without a live feed (e.g. Toronto .TO on the free plan): value at the last trade price
+      // so the position still counts in the total. change24h = null marks it as not live.
+      for (const id of stockIds) {
+        const k = quoteKey('stock', id);
+        if (next[k] && !next[k].stale) continue;
+        const last = get()
+          .transactions.filter((t) => !t.deleted && t.category === 'stock' && t.assetId === id && t.priceUsd > 0)
+          .sort((a, b) => b.executedAt.localeCompare(a.executedAt))[0];
+        if (last) next[k] = { price: last.priceUsd, change24h: null, stale: true };
+      }
 
       const updatedAt = errors.length === 0 ? new Date().toISOString() : get().quotesUpdatedAt;
       set({
@@ -113,6 +124,14 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => {
       await get().load();
       backgroundSync();
       get().refreshQuotes().catch(() => {});
+    },
+
+    addMany: async (inputs) => {
+      const n = await db.createTransactions(inputs);
+      await get().load();
+      backgroundSync();
+      get().refreshQuotes().catch(() => {});
+      return n;
     },
 
     update: async (id, input) => {

@@ -6,6 +6,7 @@ const DUST = 1e-10;
  * Builds open positions from the transaction history using the average-cost method.
  * - buy / reward / airdrop: add quantity, add (quantity × price + fee) to cost basis
  * - sell: remove quantity (capped at what is held), release average cost, book realized P&L
+ * - transfer_out: remove quantity at average cost (no realized P&L)
  * - stake / unstake: the asset stays owned, quantity unchanged; a fee is booked as a realized loss
  */
 export function computeHoldings(transactions: Transaction[]): Holding[] {
@@ -41,6 +42,7 @@ export function computeHoldings(transactions: Transaction[]): Holding[] {
       case 'buy':
       case 'reward':
       case 'airdrop':
+      case 'transfer_in':
         h.quantity += tx.quantity;
         h.costBasis += tx.quantity * tx.priceUsd + fee;
         break;
@@ -51,6 +53,14 @@ export function computeHoldings(transactions: Transaction[]): Holding[] {
         h.realizedPnl += sold * tx.priceUsd - fee - released;
         h.quantity -= sold;
         h.costBasis -= released;
+        break;
+      }
+      case 'transfer_out': {
+        const moved = Math.min(tx.quantity, Math.max(h.quantity, 0));
+        const avg = h.quantity > DUST ? h.costBasis / h.quantity : 0;
+        h.quantity -= moved;
+        h.costBasis -= avg * moved;
+        h.realizedPnl -= fee;
         break;
       }
       case 'stake':
