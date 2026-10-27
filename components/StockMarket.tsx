@@ -135,6 +135,7 @@ export function StockMarket({ query, active, onStatus }: Props) {
                 symbol={h.symbol}
                 name={profiles[h.symbol]?.name ?? h.name}
                 image={profiles[h.symbol]?.logo ?? undefined}
+                plate
                 price={quote.price}
                 change24h={quote.change24h}
                 divider
@@ -147,7 +148,7 @@ export function StockMarket({ query, active, onStatus }: Props) {
                 style={({ pressed }) => [styles.moreRow, pressed && { opacity: 0.6 }]}
                 accessibilityRole="button"
               >
-                <AssetBadge symbol={h.symbol} image={profiles[h.symbol]?.logo ?? undefined} size={32} />
+                <AssetBadge symbol={h.symbol} image={profiles[h.symbol]?.logo ?? undefined} size={32} plate />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.moreSymbol}>
                     {h.symbol}
@@ -176,6 +177,7 @@ export function StockMarket({ query, active, onStatus }: Props) {
           symbol={item.symbol}
           name={item.name}
           image={profiles[item.symbol]?.logo ?? undefined}
+          plate
           price={quotes[item.symbol]?.price ?? null}
           change24h={quotes[item.symbol]?.change24h ?? null}
           divider

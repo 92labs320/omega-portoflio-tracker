@@ -244,7 +244,13 @@ export default function AssetDetailScreen() {
         </Pressable>
         <View style={styles.headerCenter}>
           <View style={styles.headerTitleRow}>
-            {image ? <Image source={{ uri: image }} style={styles.headerLogo} /> : null}
+            {image ? (
+              <Image
+                source={{ uri: image }}
+                resizeMode={isCrypto ? 'cover' : 'contain'}
+                style={[styles.headerLogo, !isCrypto && { backgroundColor: '#FFFFFF', borderWidth: 3, borderColor: '#FFFFFF' }]}
+              />
+            ) : null}
             <Text style={styles.headerSymbol}>{symbol}</Text>
           </View>
           {name ? (

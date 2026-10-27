@@ -26,6 +26,7 @@ import { quoteKey, summarize } from '@/lib/portfolio';
 import type { AssetCategory } from '@/lib/types';
 import { useCurrencyStore } from '@/store/currencyStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
+import { fetchStockProfiles, type StockProfile } from '@/services/marketService';
 
 type Filter = 'all' | AssetCategory;
 const FILTERS: { id: Filter; label: string }[] = [
@@ -103,6 +104,22 @@ export default function PortfolioScreen() {
   }, [assetKeys, refreshQuotes]);
 
   const images = useMemo(() => new Map(coins.map((c) => [c.id, c.image])), [coins]);
+  const stockSymbols = holdings
+    .filter((h) => h.category === 'stock' && h.quantity > 0)
+    .map((h) => h.assetId.toUpperCase())
+    .sort()
+    .join(',');
+  const [stockProfiles, setStockProfiles] = useState<Record<string, StockProfile>>({});
+  useEffect(() => {
+    if (!stockSymbols) return;
+    let alive = true;
+    fetchStockProfiles(stockSymbols.split(','))
+      .then((p) => alive && setStockProfiles(p))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [stockSymbols]);
   const filtered = useMemo(
     () => holdings.filter((h) => filter === 'all' || h.category === filter),
     [holdings, filter],
@@ -286,7 +303,10 @@ export default function PortfolioScreen() {
             {rows.length > 0 ? (
               <View style={styles.holdingsList}>
                 {rows.map(({ h, key, q, value, change, changePct }, idx) => {
-                  const img = h.category === 'crypto' ? images.get(h.assetId) : undefined;
+                  const img =
+                    h.category === 'crypto'
+                      ? images.get(h.assetId)
+                      : stockProfiles[h.assetId.toUpperCase()]?.logo ?? undefined;
                   const ac = assetColor(h.symbol);
                   return (
                     <Pressable
@@ -300,7 +320,11 @@ export default function PortfolioScreen() {
                       accessibilityRole="button"
                     >
                       {img ? (
-                        <Image source={{ uri: img }} style={styles.logo} />
+                        <Image
+                          source={{ uri: img }}
+                          resizeMode={h.category === 'stock' ? 'contain' : 'cover'}
+                          style={[styles.logo, h.category === 'stock' && styles.logoPlate]}
+                        />
                       ) : (
                         <View style={[styles.circle, { backgroundColor: ac + '26' }]}>
                           <Text style={[styles.circleText, { color: ac }]}>{h.symbol.slice(0, 3).toUpperCase()}</Text>
@@ -463,6 +487,7 @@ const styles = StyleSheet.create({
   holdingRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 14 },
   holdingDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.borderLight },
   logo: { width: 40, height: 40, borderRadius: 20, marginRight: 12 },
+  logoPlate: { backgroundColor: '#FFFFFF', borderWidth: 5, borderColor: '#FFFFFF' },
   circle: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   circleText: { fontSize: 12, fontWeight: '800' },
   assetMeta: { flex: 1, marginRight: 10 },

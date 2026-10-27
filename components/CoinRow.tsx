@@ -12,18 +12,37 @@ export interface CoinRowProps {
   price: number | null;
   change24h: number | null;
   rank?: number;
+  /** White plate behind the logo (stock logos are often dark on transparent). */
+  plate?: boolean;
   divider?: boolean;
   onPress?: () => void;
 }
 
-export function AssetBadge({ symbol, image, size = 38 }: { symbol: string; image?: string; size?: number }) {
+export function AssetBadge({
+  symbol,
+  image,
+  size = 38,
+  plate,
+}: {
+  symbol: string;
+  image?: string;
+  size?: number;
+  plate?: boolean;
+}) {
   const [failed, setFailed] = useState(false);
   if (image && !failed) {
     return (
       <Image
         source={{ uri: image }}
         onError={() => setFailed(true)}
-        style={{ width: size, height: size, borderRadius: size / 2, marginRight: 12 }}
+        resizeMode={plate ? 'contain' : 'cover'}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          marginRight: 12,
+          ...(plate ? { backgroundColor: '#FFFFFF', borderWidth: size * 0.12, borderColor: '#FFFFFF' } : null),
+        }}
       />
     );
   }
@@ -34,7 +53,7 @@ export function AssetBadge({ symbol, image, size = 38 }: { symbol: string; image
   );
 }
 
-function CoinRowBase({ symbol, name, image, price, change24h, rank, divider, onPress }: CoinRowProps) {
+function CoinRowBase({ symbol, name, image, price, change24h, rank, divider, onPress, plate }: CoinRowProps) {
   const currencyCode = useCurrencyStore((st) => st.code);
   const has = price !== null && change24h !== null && Number.isFinite(change24h);
   const positive = (change24h ?? 0) >= 0;
@@ -49,7 +68,7 @@ function CoinRowBase({ symbol, name, image, price, change24h, rank, divider, onP
       accessibilityLabel={`${name}, ${price !== null ? formatUsd(price) : 'no price'}, ${formatPct(change24h)} today`}
     >
       {rank !== undefined && <Text style={styles.rank}>{rank}</Text>}
-      <AssetBadge symbol={symbol} image={image} />
+      <AssetBadge symbol={symbol} image={image} plate={plate} />
       <View style={styles.identity}>
         <Text style={styles.symbol}>{symbol.toUpperCase()}</Text>
         <Text style={styles.name} numberOfLines={1}>

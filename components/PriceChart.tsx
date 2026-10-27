@@ -30,13 +30,13 @@ const BOTTOM = 26;
 function niceNumber(usd: number): string {
   const v = usd * getFx().rate;
   const abs = Math.abs(v);
-  const digits = abs >= 1000 ? 0 : abs >= 1 ? 2 : abs >= 0.01 ? 4 : 6;
+  const digits = abs === 0 || abs >= 1000 ? 0 : abs >= 1 ? 2 : abs >= 0.01 ? 4 : 6;
   return formatNumber(v, digits, digits);
 }
 
-function dateLabel(t: number, range: Range | 'ALL'): string {
+function dateLabel(t: number, range: Range | 'ALL', spanMs = Infinity): string {
   const d = new Date(t);
-  if (range === '1D') return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  if (range === '1D' || spanMs < 2 * 86_400_000) return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   if (range === '1W') return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
   return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
 }
@@ -160,7 +160,7 @@ export function PriceChart({ data, range, height = 260, positive, onScrub }: Pro
     const n = 4;
     return Array.from({ length: n }, (_, i) => {
       const t = geo.t0 + ((geo.t1 - geo.t0) * (i + 0.5)) / n;
-      return { x: geo.x(t), label: dateLabel(t, range) };
+      return { x: geo.x(t), label: dateLabel(t, range, geo.t1 - geo.t0) };
     });
   }, [geo, range]);
 

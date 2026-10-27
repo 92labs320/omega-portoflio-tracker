@@ -3,6 +3,8 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  InputAccessoryView,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -77,6 +79,7 @@ const USD_LIKE = new Set(['USD', 'USDT', 'USDC', 'BUSD', 'FDUSD', 'TUSD', 'DAI',
 const OTHER_TYPES: TransactionType[] = ['reward', 'airdrop', 'stake', 'unstake'];
 const LAST_EXCHANGE_KEY = 'trade.lastExchange';
 const NOW_WINDOW = 3 * 60_000;
+const KB_ACCESSORY = 'tx-form-keyboard';
 
 function Row({
   label,
@@ -189,6 +192,19 @@ export default function TransactionFormScreen() {
     editing ? toInputNumber(editing.feeQuote ?? editing.feeUsd) === '0' ? '' : toInputNumber(editing.feeQuote ?? editing.feeUsd) : '',
   );
   const [notes, setNotes] = useState(editing?.notes ?? '');
+  const priceRef = useRef<TextInput>(null);
+  const qtyRef = useRef<TextInput>(null);
+  const feeRef = useRef<TextInput>(null);
+  const notesRef = useRef<TextInput>(null);
+  const [focused, setFocused] = useState<'price' | 'qty' | 'fee' | 'notes' | null>(null);
+  const FIELD_ORDER = ['price', 'qty', 'fee', 'notes'] as const;
+  const fieldRefs = { price: priceRef, qty: qtyRef, fee: feeRef, notes: notesRef };
+  const focusNext = () => {
+    const i = focused ? FIELD_ORDER.indexOf(focused) : -1;
+    const next = FIELD_ORDER[i + 1];
+    if (next) fieldRefs[next].current?.focus();
+    else Keyboard.dismiss();
+  };
   const [saving, setSaving] = useState(false);
 
   const symbol = (isCrypto ? asset?.symbol : ticker.trim().toUpperCase()) ?? '';
@@ -753,10 +769,12 @@ export default function TransactionFormScreen() {
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 120 + insets.bottom }}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        automaticallyAdjustKeyboardInsets
       >
         {!isCrypto && stockPicked ? (
           <View style={styles.stockCard}>
-            <AssetBadge symbol={ticker} image={stockProfile?.logo ?? undefined} size={44} />
+            <AssetBadge symbol={ticker} image={stockProfile?.logo ?? undefined} size={44} plate />
             <View style={{ flex: 1 }}>
               <Text style={styles.stockSymbol}>
                 {ticker}
@@ -861,12 +879,15 @@ export default function TransactionFormScreen() {
               style={[styles.input, { flex: 1 }]}
               placeholder="0.00"
               placeholderTextColor={Colors.textTertiary}
+              ref={priceRef}
               value={price}
               onChangeText={(v) => {
                 setPrice(v);
                 setPriceSource('Entered manually');
               }}
               keyboardType="decimal-pad"
+              onFocus={() => setFocused('price')}
+              inputAccessoryViewID={KB_ACCESSORY}
             />
             {priceLoading ? (
               <ActivityIndicator color={Colors.accent} />
@@ -899,9 +920,12 @@ export default function TransactionFormScreen() {
             style={styles.input}
             placeholder="0"
             placeholderTextColor={Colors.textTertiary}
+            ref={qtyRef}
             value={quantity}
             onChangeText={setQuantity}
             keyboardType="decimal-pad"
+            onFocus={() => setFocused('qty')}
+            inputAccessoryViewID={KB_ACCESSORY}
           />
           {type === 'sell' && symbol ? (
             <Text style={styles.source}>
@@ -917,9 +941,12 @@ export default function TransactionFormScreen() {
             style={styles.input}
             placeholder="0"
             placeholderTextColor={Colors.textTertiary}
+            ref={feeRef}
             value={fee}
             onChangeText={setFee}
             keyboardType="decimal-pad"
+            onFocus={() => setFocused('fee')}
+            inputAccessoryViewID={KB_ACCESSORY}
           />
         </View>
 
@@ -930,8 +957,11 @@ export default function TransactionFormScreen() {
             style={[styles.input, { minHeight: 44 }]}
             placeholder="Optional"
             placeholderTextColor={Colors.textTertiary}
+            ref={notesRef}
             value={notes}
             onChangeText={setNotes}
+            onFocus={() => setFocused('notes')}
+            inputAccessoryViewID={KB_ACCESSORY}
             multiline
             maxLength={500}
           />
@@ -998,6 +1028,18 @@ export default function TransactionFormScreen() {
         onClose={() => setPairPicker(false)}
       />
       <DateTimeSheet visible={dateSheet} value={ts} onChange={onPickDate} onClose={() => setDateSheet(false)} />
+      {Platform.OS === 'ios' ? (
+        <InputAccessoryView nativeID={KB_ACCESSORY}>
+          <View style={styles.kbBar}>
+            <Pressable onPress={focusNext} hitSlop={10} accessibilityRole="button" disabled={focused === 'notes'}>
+              <Text style={[styles.kbNext, focused === 'notes' && { opacity: 0.3 }]}>Next</Text>
+            </Pressable>
+            <Pressable onPress={() => Keyboard.dismiss()} hitSlop={10} accessibilityRole="button">
+              <Text style={styles.kbDone}>Done</Text>
+            </Pressable>
+          </View>
+        </InputAccessoryView>
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
@@ -1059,6 +1101,18 @@ const styles = StyleSheet.create({
   summaryLabel: { color: Colors.textSecondary, fontSize: 15 },
   summaryValue: { color: Colors.text, fontSize: 16, fontWeight: '800' },
 
+  kbBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    height: 46,
+    backgroundColor: '#1C1C22',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.borderLight,
+  },
+  kbNext: { color: Colors.textSecondary, fontSize: 16, fontWeight: '700' },
+  kbDone: { color: Colors.accent, fontSize: 17, fontWeight: '800' },
   bottomBar: {
     position: 'absolute',
     left: 0,
