@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CoinRow } from '@/components/CoinRow';
+import { StockMarket } from '@/components/StockMarket';
 import { Colors, Typography } from '@/constants/Colors';
 import { formatCompactUsd, formatNumber, formatTime } from '@/lib/format';
 import { useMarkets } from '@/hooks/useMarkets';
@@ -39,6 +40,12 @@ export default function MarketsScreen() {
   const followed = useWatchlistStore((s) => s.ids);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  const [market, setMarket] = useState<'crypto' | 'stock'>('crypto');
+  const [stockStatus, setStockStatus] = useState<{ updatedAt: number | null; error: string | null }>({
+    updatedAt: null,
+    error: null,
+  });
+  const onStockStatus = useCallback((st: { updatedAt: number | null; error: string | null }) => setStockStatus(st), []);
   const [more, setMore] = useState<CoinSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const seq = useRef(0);
@@ -46,7 +53,7 @@ export default function MarketsScreen() {
   // Search every coin listed on CoinGecko (not just the top 250) once 2+ characters are typed.
   useEffect(() => {
     const q = query.trim();
-    if (q.length < 2) {
+    if (q.length < 2 || market !== 'crypto') {
       setMore([]);
       setSearching(false);
       return;
@@ -60,7 +67,7 @@ export default function MarketsScreen() {
         .finally(() => id === seq.current && setSearching(false));
     }, 350);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, market]);
 
   const totals = useMemo(() => {
     const cap = coins.reduce((s, c) => s + (c.market_cap || 0), 0);
@@ -189,19 +196,45 @@ export default function MarketsScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Markets</Text>
         <Text style={styles.subtitle}>
-          {error
-            ? coins.length
-              ? `Offline · last update ${formatTime(updatedAt)}`
-              : 'Live prices unavailable'
-            : `Top 250 crypto · ${updatedAt ? `updated ${formatTime(updatedAt)}` : 'loading…'} · CoinGecko`}
+          {market === 'stock'
+            ? stockStatus.error
+              ? stockStatus.updatedAt
+                ? `Offline · last update ${formatTime(new Date(stockStatus.updatedAt).toISOString())}`
+                : stockStatus.error
+              : `US stocks & ETFs · ${stockStatus.updatedAt ? `updated ${formatTime(new Date(stockStatus.updatedAt).toISOString())}` : 'loading…'} · Finnhub`
+            : error
+              ? coins.length
+                ? `Offline · last update ${formatTime(updatedAt)}`
+                : 'Live prices unavailable'
+              : `Top 250 crypto · ${updatedAt ? `updated ${formatTime(updatedAt)}` : 'loading…'} · CoinGecko`}
         </Text>
+        <View style={styles.segment}>
+          {(['crypto', 'stock'] as const).map((m) => (
+            <Pressable
+              key={m}
+              onPress={() => setMarket(m)}
+              style={[styles.segmentBtn, market === m && styles.segmentBtnOn]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: market === m }}
+            >
+              <MaterialCommunityIcons
+                name={m === 'crypto' ? 'bitcoin' : 'chart-line'}
+                size={15}
+                color={market === m ? Colors.background : Colors.textSecondary}
+              />
+              <Text style={[styles.segmentText, market === m && styles.segmentTextOn]}>
+                {m === 'crypto' ? 'Crypto' : 'Stocks'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
 
       <View style={styles.searchContainer}>
         <MaterialCommunityIcons name="magnify" size={20} color={Colors.textSecondary} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search any coin"
+          placeholder={market === 'stock' ? 'Search stocks · Apple, TSLA, SPY…' : 'Search any coin'}
           placeholderTextColor={Colors.textTertiary}
           value={query}
           onChangeText={setQuery}
@@ -212,7 +245,9 @@ export default function MarketsScreen() {
         />
       </View>
 
-      {loading && coins.length === 0 ? (
+      {market === 'stock' ? (
+        <StockMarket query={query} active={market === 'stock'} onStatus={onStockStatus} />
+      ) : loading && coins.length === 0 ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={Colors.accent} />
         </View>
@@ -275,6 +310,20 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 12 },
   title: { ...Typography.largeTitle, color: Colors.text },
   subtitle: { ...Typography.footnote, color: Colors.textTertiary, marginTop: 4 },
+  segment: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    marginTop: 12,
+    padding: 3,
+    borderRadius: 20,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  segmentBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 16, paddingVertical: 7, borderRadius: 17 },
+  segmentBtnOn: { backgroundColor: Colors.text },
+  segmentText: { color: Colors.textSecondary, fontSize: 14, fontWeight: '700' },
+  segmentTextOn: { color: Colors.background },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',

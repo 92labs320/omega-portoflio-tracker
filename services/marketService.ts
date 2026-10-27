@@ -1,4 +1,5 @@
 import { Config } from '@/constants/Config';
+import { getKv, setKv } from '@/lib/db';
 import type { Quote } from '@/lib/types';
 
 export interface CoinMarket {
@@ -132,15 +133,103 @@ export async function searchCoins(query: string): Promise<CoinSearchResult[]> {
   return (data.coins ?? []).slice(0, 20);
 }
 
-/** Stock quotes come from the Omega API (Finnhub proxy) so no API key ships in the app. */
-export async function fetchStockQuotes(symbols: string[]): Promise<Record<string, Quote>> {
-  const unique = Array.from(new Set(symbols.map((s) => s.toUpperCase()))).filter(Boolean);
-  if (unique.length === 0 || !Config.apiUrl) return {};
-  const data = await getJson<{ quotes: Record<string, Quote> }>(
-    `${Config.apiUrl}/api/quotes?symbols=${encodeURIComponent(unique.join(','))}`,
-  );
-  return data.quotes ?? {};
+export interface StockQuote extends Quote {
+  open?: number | null;
+  high?: number | null;
+  low?: number | null;
+  prevClose?: number | null;
+  time?: number | null;
 }
+
+/** Stock quotes come from the Omega API (Finnhub proxy) so no API key ships in the app. */
+export async function fetchStockQuotes(symbols: string[]): Promise<Record<string, StockQuote>> {
+  const unique = Array.from(new Set(symbols.map((s) => s.toUpperCase()))).filter(Boolean).sort();
+  if (unique.length === 0 || !Config.apiUrl) return {};
+  const out: Record<string, StockQuote> = {};
+  for (let i = 0; i < unique.length; i += 25) {
+    const chunk = unique.slice(i, i + 25);
+    const data = await getJson<{ quotes: Record<string, StockQuote> }>(
+      `${Config.apiUrl}/api/quotes?symbols=${encodeURIComponent(chunk.join(','))}`,
+    );
+    Object.assign(out, data.quotes ?? {});
+  }
+  return out;
+}
+
+export interface StockHit {
+  symbol: string;
+  name: string;
+  type: string;
+}
+
+/** Search US stocks & ETFs by ticker or company name (Finnhub via the Omega API). */
+export async function searchStocks(query: string): Promise<StockHit[]> {
+  const q = query.trim();
+  if (q.length < 1 || !Config.apiUrl) return [];
+  const data = await getJson<{ stocks: StockHit[] }>(
+    `${Config.apiUrl}/api/search?type=stock&q=${encodeURIComponent(q.toLowerCase())}`,
+  );
+  return data.stocks ?? [];
+}
+
+export interface StockProfile {
+  name: string;
+  logo: string | null;
+  exchange: string | null;
+  currency: string | null;
+  marketCap: number | null;
+  industry: string | null;
+  website: string | null;
+  ipo: string | null;
+  country: string | null;
+}
+
+const PROFILE_KEY = 'cache.stock_profiles.v1';
+const PROFILE_TTL = 7 * 24 * 3600_000;
+let profileMem: Record<string, { at: number; p: StockProfile | null }> | null = null;
+
+async function profileCache() {
+  if (profileMem) return profileMem;
+  try {
+    const raw = await getKv(PROFILE_KEY);
+    profileMem = raw ? JSON.parse(raw) : {};
+  } catch {
+    profileMem = {};
+  }
+  return profileMem as Record<string, { at: number; p: StockProfile | null }>;
+}
+
+/** Company name + logo etc. Cached on the device for a week (they rarely change). */
+export async function fetchStockProfiles(symbols: string[]): Promise<Record<string, StockProfile>> {
+  const unique = Array.from(new Set(symbols.map((s) => s.toUpperCase()))).filter(Boolean).sort();
+  const cache = await profileCache();
+  const now = Date.now();
+  const missing = unique.filter((s) => !cache[s] || now - cache[s].at > PROFILE_TTL);
+  if (missing.length && Config.apiUrl) {
+    for (let i = 0; i < missing.length; i += 25) {
+      const chunk = missing.slice(i, i + 25);
+      try {
+        const data = await getJson<{ profiles: Record<string, StockProfile> }>(
+          `${Config.apiUrl}/api/quotes?profile=1&symbols=${encodeURIComponent(chunk.join(','))}`,
+        );
+        for (const s of chunk) cache[s] = { at: now, p: data.profiles?.[s] ?? null };
+      } catch {
+        // keep whatever we had
+      }
+    }
+    setKv(PROFILE_KEY, JSON.stringify(cache)).catch(() => {});
+  }
+  const out: Record<string, StockProfile> = {};
+  for (const s of unique) if (cache[s]?.p) out[s] = cache[s].p as StockProfile;
+  return out;
+}
+
+/** Shown in Markets → Stocks before the user searches. */
+export const POPULAR_STOCKS = [
+  'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AVGO', 'BRK.B', 'JPM',
+  'V', 'MA', 'NFLX', 'AMD', 'COST', 'WMT', 'DIS', 'PLTR', 'COIN', 'SHOP',
+  'SPY', 'QQQ', 'VOO', 'MSTR', 'UBER',
+];
 
 export function stockQuotesAvailable(): boolean {
   return Config.apiUrl.length > 0;

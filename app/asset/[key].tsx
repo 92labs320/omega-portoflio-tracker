@@ -42,7 +42,7 @@ import {
   type CoinDetail,
   type Range,
 } from '@/services/coinService';
-import { fetchStockQuotes } from '@/services/marketService';
+import { fetchStockProfiles, fetchStockQuotes, type StockProfile, type StockQuote } from '@/services/marketService';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useWatchlistStore } from '@/store/watchlistStore';
 import { useCurrencyStore } from '@/store/currencyStore';
@@ -92,7 +92,7 @@ function ChangeBadge({ pct, abs }: { pct: number | null; abs?: number | null }) 
 
 export default function AssetDetailScreen() {
   const currencyCode = useCurrencyStore((st) => st.code);
-  const { key, tab: initialTab } = useLocalSearchParams<{ key: string; tab?: string }>();
+  const { key, tab: initialTab, name: paramName } = useLocalSearchParams<{ key: string; tab?: string; name?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -119,7 +119,8 @@ export default function AssetDetailScreen() {
   const feedCoin = isCrypto ? coins.find((c) => c.id === assetId) : undefined;
   const [detail, setDetail] = useState<CoinDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [stockQuote, setStockQuote] = useState<{ price: number; change24h: number | null } | null>(null);
+  const [stockQuote, setStockQuote] = useState<StockQuote | null>(null);
+  const [profile, setProfile] = useState<StockProfile | null>(null);
 
   const followed = useWatchlistStore((s) => s.ids.includes(assetId));
   const toggleFollow = useWatchlistStore((s) => s.toggle);
@@ -131,9 +132,20 @@ export default function AssetDetailScreen() {
         .then((d) => alive && (setDetail(d), setDetailError(null)))
         .catch((e) => alive && setDetailError(e instanceof Error ? e.message : 'Unavailable'));
     } else {
-      fetchStockQuotes([assetId])
-        .then((q) => alive && setStockQuote(q[assetId] ?? null))
+      const sym = assetId.toUpperCase();
+      const load = () =>
+        fetchStockQuotes([sym])
+          .then((q) => alive && setStockQuote(q[sym] ?? null))
+          .catch(() => {});
+      load();
+      fetchStockProfiles([sym])
+        .then((p) => alive && setProfile(p[sym] ?? null))
         .catch(() => {});
+      const t = setInterval(load, 60_000);
+      return () => {
+        alive = false;
+        clearInterval(t);
+      };
     }
     return () => {
       alive = false;
@@ -166,8 +178,8 @@ export default function AssetDetailScreen() {
 
   // ----- derived numbers -----
   const symbol = (feedCoin?.symbol ?? detail?.symbol ?? holding?.symbol ?? txs[0]?.symbol ?? assetId).toUpperCase();
-  const name = feedCoin?.name ?? detail?.name ?? holding?.name ?? txs[0]?.name ?? '';
-  const image = feedCoin?.image ?? detail?.image ?? undefined;
+  const name = feedCoin?.name ?? detail?.name ?? profile?.name ?? holding?.name ?? txs[0]?.name ?? paramName ?? '';
+  const image = feedCoin?.image ?? detail?.image ?? profile?.logo ?? undefined;
   const portfolioQuote = quotes[quoteKey(category, assetId)];
 
   const livePrice =
@@ -478,15 +490,68 @@ export default function AssetDetailScreen() {
                 ) : null}
               </>
             ) : (
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Quote</Text>
-                <DataRow label="Last price" value={livePrice !== null ? formatUsd(livePrice) : '—'} />
-                <DataRow label="Change (day)" value={formatPct(liveChange24h)} />
-                <Text style={[styles.muted, { marginTop: 10 }]}>
-                  Interactive charts are available for crypto assets. Stock prices are provided by Finnhub and may be
-                  delayed.
+              <>
+                {holding && holding.quantity > 0 ? (
+                  <Pressable style={styles.card} onPress={() => setTab('transactions')}>
+                    <View style={styles.cardHeader}>
+                      <Text style={styles.cardTitle}>Your position</Text>
+                      <MaterialCommunityIcons name="chevron-right" size={20} color={Colors.textTertiary} />
+                    </View>
+                    <View style={styles.statsGrid}>
+                      <Stat label="Shares" value={formatQty(holding.quantity)} />
+                      <Stat label="Value" value={value !== null ? formatUsd(value) : '—'} />
+                      <Stat label="Avg. cost" value={formatUsd(holding.avgCost)} />
+                      <Stat
+                        label="Unrealized P&L"
+                        value={unrealized !== null ? `${formatSignedUsd(unrealized)} (${formatPct(unrealizedPct)})` : '—'}
+                        color={unrealized === null ? undefined : unrealized >= 0 ? Colors.green : Colors.red}
+                      />
+                    </View>
+                  </Pressable>
+                ) : null}
+
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Today</Text>
+                  <DataRow label="Last price" value={livePrice !== null ? formatUsd(livePrice) : '—'} />
+                  <DataRow label="Change (day)" value={formatPct(liveChange24h)} />
+                  <DataRow label="Open" value={stockQuote?.open ? formatUsd(stockQuote.open) : '—'} />
+                  <DataRow
+                    label="Day range"
+                    value={
+                      stockQuote?.low && stockQuote?.high
+                        ? `${formatUsd(stockQuote.low)} – ${formatUsd(stockQuote.high)}`
+                        : '—'
+                    }
+                  />
+                  <DataRow label="Previous close" value={stockQuote?.prevClose ? formatUsd(stockQuote.prevClose) : '—'} />
+                </View>
+
+                {profile ? (
+                  <View style={styles.card}>
+                    <Text style={styles.cardTitle}>About {profile.name}</Text>
+                    <DataRow label="Market cap" value={formatCompactUsd(profile.marketCap)} />
+                    {profile.exchange ? <DataRow label="Exchange" value={profile.exchange.replace(/ ?-.*$/, '')} /> : null}
+                    {profile.industry ? <DataRow label="Industry" value={profile.industry} /> : null}
+                    {profile.country ? <DataRow label="Country" value={profile.country} /> : null}
+                    {profile.ipo ? <DataRow label="IPO" value={formatDate(profile.ipo)} /> : null}
+                    {profile.website ? (
+                      <Pressable
+                        style={styles.website}
+                        onPress={() => Linking.openURL(profile.website as string).catch(() => {})}
+                        accessibilityRole="link"
+                      >
+                        <MaterialCommunityIcons name="web" size={18} color={Colors.accent} />
+                        <Text style={styles.link}>{profile.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                <Text style={[styles.muted, { marginHorizontal: 20, marginTop: 4 }]}>
+                  Stock prices are provided by Finnhub (US listings) and may be delayed. Price charts for stocks are coming
+                  soon.
                 </Text>
-              </View>
+              </>
             )}
 
             <Text style={styles.disclaimer}>

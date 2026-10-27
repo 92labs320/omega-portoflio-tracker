@@ -9,7 +9,7 @@ export interface CoinRowProps {
   symbol: string;
   name: string;
   image?: string;
-  price: number;
+  price: number | null;
   change24h: number | null;
   rank?: number;
   divider?: boolean;
@@ -36,17 +36,17 @@ export function AssetBadge({ symbol, image, size = 38 }: { symbol: string; image
 
 function CoinRowBase({ symbol, name, image, price, change24h, rank, divider, onPress }: CoinRowProps) {
   const currencyCode = useCurrencyStore((st) => st.code);
-  const has = change24h !== null && Number.isFinite(change24h);
+  const has = price !== null && change24h !== null && Number.isFinite(change24h);
   const positive = (change24h ?? 0) >= 0;
   const color = !has ? Colors.textTertiary : positive ? Colors.accent : Colors.red;
-  const abs = has ? price - price / (1 + (change24h as number) / 100) : null;
+  const abs = has && price !== null ? price - price / (1 + (change24h as number) / 100) : null;
   return (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
       style={({ pressed }) => [styles.row, divider && styles.divider, pressed && styles.pressed]}
       accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={`${name}, ${formatUsd(price)}, ${formatPct(change24h)} in 24 hours`}
+      accessibilityLabel={`${name}, ${price !== null ? formatUsd(price) : 'no price'}, ${formatPct(change24h)} today`}
     >
       {rank !== undefined && <Text style={styles.rank}>{rank}</Text>}
       <AssetBadge symbol={symbol} image={image} />
@@ -57,7 +57,7 @@ function CoinRowBase({ symbol, name, image, price, change24h, rank, divider, onP
         </Text>
       </View>
       <View style={styles.values}>
-        <Text style={styles.price}>{formatUsd(price)}</Text>
+        <Text style={styles.price}>{price !== null ? formatUsd(price) : '—'}</Text>
         <View style={styles.changeRow}>
           {abs !== null ? <Text style={[styles.changeAbs, { color }]}>{formatSignedNumber(abs)}</Text> : null}
           <View
