@@ -3,6 +3,8 @@ import { PanResponder, StyleSheet, Text, View, type LayoutChangeEvent } from 're
 import Svg, { Defs, Line, LinearGradient, Path, Rect, Stop, Circle } from 'react-native-svg';
 
 import { Colors } from '@/constants/Colors';
+import { getFx } from '@/lib/currency';
+import { formatNumber } from '@/lib/format';
 import type { Candle, ChartData, LinePoint, Range } from '@/services/coinService';
 
 export interface ScrubPoint {
@@ -14,7 +16,7 @@ export interface ScrubPoint {
 
 interface Props {
   data: ChartData;
-  range: Range;
+  range: Range | 'ALL';
   height?: number;
   positive: boolean;
   onScrub?: (p: ScrubPoint | null) => void;
@@ -24,13 +26,15 @@ const AXIS_W = 68;
 const TOP = 22;
 const BOTTOM = 26;
 
-function niceNumber(v: number): string {
+/** Axis numbers in the display currency (input USD), Delta typography. */
+function niceNumber(usd: number): string {
+  const v = usd * getFx().rate;
   const abs = Math.abs(v);
   const digits = abs >= 1000 ? 0 : abs >= 1 ? 2 : abs >= 0.01 ? 4 : 6;
-  return v.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return formatNumber(v, digits, digits);
 }
 
-function dateLabel(t: number, range: Range): string {
+function dateLabel(t: number, range: Range | 'ALL'): string {
   const d = new Date(t);
   if (range === '1D') return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   if (range === '1W') return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
@@ -236,8 +240,14 @@ export function PriceChart({ data, range, height = 260, positive, onScrub }: Pro
           </Svg>
 
           {/* Labels as RN text for crisp rendering */}
-          <Text style={[styles.refLabel, { top: geo.y(geo.max) - 17 }]}>${niceNumber(geo.max)}</Text>
-          <Text style={[styles.refLabel, { top: geo.y(geo.min) + 3 }]}>${niceNumber(geo.min)}</Text>
+          <Text style={[styles.refLabel, { top: geo.y(geo.max) - 17 }]}>
+            {getFx().symbol}
+            {niceNumber(geo.max)}
+          </Text>
+          <Text style={[styles.refLabel, { top: geo.y(geo.min) + 3 }]}>
+            {getFx().symbol}
+            {niceNumber(geo.min)}
+          </Text>
           {ticks.map((v, i) => (
             <Text key={i} style={[styles.yLabel, { top: geo.y(v) - 8 }]} numberOfLines={1}>
               {niceNumber(v)}

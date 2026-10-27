@@ -17,6 +17,7 @@ import { Colors } from '@/constants/Colors';
 import { formatPct, formatTime } from '@/lib/format';
 import { useMarkets } from '@/hooks/useMarkets';
 import { useWatchlistStore } from '@/store/watchlistStore';
+import { useCurrencyStore } from '@/store/currencyStore';
 
 const WATCHLIST_IDS = [
   'bitcoin',
@@ -32,6 +33,7 @@ const WATCHLIST_IDS = [
 ];
 
 export default function HomeScreen() {
+  const currencyCode = useCurrencyStore((st) => st.code);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { coins, loading, error, updatedAt, refresh } = useMarkets();

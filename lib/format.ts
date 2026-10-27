@@ -1,30 +1,68 @@
-export function formatUsd(value: number, opts: { compact?: boolean } = {}): string {
-  if (!Number.isFinite(value)) return '—';
-  const abs = Math.abs(value);
-  if (opts.compact && abs >= 1e6) return formatCompactUsd(value);
-  const digits = abs > 0 && abs < 1 ? (abs < 0.01 ? 6 : 4) : 2;
-  return value.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: digits,
-  });
+import { getFx } from './currency';
+
+/*
+ * Number typography (Delta style): thousands separated by a non-breaking space, comma for decimals.
+ *   51 379,20   ·   -45 188,42   ·   -69,99%   ·   C$51 379,20
+ * Implemented by hand: Hermes' Intl support is partial on iOS.
+ * All monetary inputs are USD and are converted to the selected display currency.
+ */
+
+const GROUP = '\u00A0';
+
+function groupInt(int: string): string {
+  return int.replace(/\B(?=(\d{3})+(?!\d))/g, GROUP);
 }
 
-export function formatSignedUsd(value: number): string {
-  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
-  return `${sign}${formatUsd(Math.abs(value))}`;
+/** Generic number: min/max decimals, trailing zeros trimmed down to `minDec`. */
+export function formatNumber(value: number, minDec = 0, maxDec = 2): string {
+  if (!Number.isFinite(value)) return '—';
+  const neg = value < 0;
+  const fixed = Math.abs(value).toFixed(maxDec);
+  const [int, decRaw = ''] = fixed.split('.');
+  let dec = decRaw.replace(/0+$/, '');
+  while (dec.length < minDec) dec += '0';
+  const out = groupInt(int) + (dec ? `,${dec}` : '');
+  return neg && Number(fixed) !== 0 ? `-${out}` : out;
+}
+
+/** Decimals for a price/amount: 2 above 1, more significant digits for small values. */
+function moneyDecimals(abs: number): number {
+  if (abs === 0 || abs >= 1) return 2;
+  return Math.min(10, 2 - Math.floor(Math.log10(abs)) + 1);
+}
+
+/** Display-currency number without symbol (e.g. "87 791,33"). Input in USD. */
+export function formatAmount(usd: number): string {
+  if (!Number.isFinite(usd)) return '—';
+  const v = usd * getFx().rate;
+  return formatNumber(v, 2, moneyDecimals(Math.abs(v)));
+}
+
+/** Money in the display currency with its symbol: "C$51 379,20". Input in USD. */
+export function formatUsd(usd: number, opts: { compact?: boolean } = {}): string {
+  if (!Number.isFinite(usd)) return '—';
+  if (opts.compact && Math.abs(usd) >= 1e6) return formatCompactUsd(usd);
+  const { symbol, rate } = getFx();
+  const v = usd * rate;
+  const num = formatNumber(Math.abs(v), 2, moneyDecimals(Math.abs(v)));
+  return `${v < 0 ? '-' : ''}${symbol}${num}`;
+}
+
+export function formatSignedUsd(usd: number): string {
+  if (!Number.isFinite(usd)) return '—';
+  const v = usd * getFx().rate;
+  const sign = v > 0 ? '+' : v < 0 ? '-' : '';
+  return `${sign}${formatUsd(Math.abs(usd))}`;
 }
 
 export function formatPct(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
-  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
-  return `${sign}${Math.abs(value).toFixed(2)}%`;
+  const sign = value > 0 ? '+' : value < 0 ? '-' : '';
+  return `${sign}${formatNumber(Math.abs(value), 2, 2)}%`;
 }
 
 export function formatQty(value: number): string {
-  if (!Number.isFinite(value)) return '—';
-  return value.toLocaleString('en-US', { maximumFractionDigits: 8 });
+  return formatNumber(value, 0, 8);
 }
 
 export function formatTime(iso: string | null): string {
@@ -93,17 +131,18 @@ function compact(value: number): string {
   for (const [n, u] of units) {
     if (abs >= n) {
       const v = value / n;
-      const digits = Math.abs(v) >= 100 ? 1 : 2;
-      return `${v.toLocaleString('en-US', { maximumFractionDigits: digits })}${u}`;
+      return `${formatNumber(v, 0, Math.abs(v) >= 100 ? 1 : 2)}${u}`;
     }
   }
-  return value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return formatNumber(value, 0, 2);
 }
 
-/** Compact USD for large figures: $1.59T, $35.2B, $812.4M. */
-export function formatCompactUsd(value: number | null | undefined): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
-  return `${value < 0 ? '−' : ''}$${compact(Math.abs(value))}`;
+/** Compact money in the display currency: C$2,74T, $117,9B. Input in USD. */
+export function formatCompactUsd(usd: number | null | undefined): string {
+  if (usd === null || usd === undefined || !Number.isFinite(usd)) return '—';
+  const { symbol, rate } = getFx();
+  const v = usd * rate;
+  return `${v < 0 ? '-' : ''}${symbol}${compact(Math.abs(v))}`;
 }
 
 export function formatCompactNumber(value: number | null | undefined): string {
@@ -111,13 +150,14 @@ export function formatCompactNumber(value: number | null | undefined): string {
   return compact(value);
 }
 
-/** Signed USD change, e.g. "+1,234.56" or "−12.30" (no currency symbol, like Delta). */
-export function formatSignedNumber(value: number): string {
-  if (!Number.isFinite(value)) return '—';
-  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
-  const abs = Math.abs(value);
-  const digits = abs > 0 && abs < 1 ? 4 : 2;
-  return `${sign}${abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: digits })}`;
+/** Signed change without symbol, in the display currency: "+1 234,56", "-204 755". Input in USD. */
+export function formatSignedNumber(usd: number): string {
+  if (!Number.isFinite(usd)) return '—';
+  const v = usd * getFx().rate;
+  const abs = Math.abs(v);
+  const sign = v > 0 ? '+' : v < 0 ? '-' : '';
+  const dec = abs >= 100_000 ? 0 : moneyDecimals(abs);
+  return `${sign}${formatNumber(abs, dec === 0 ? 0 : 2, dec)}`;
 }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -147,5 +187,5 @@ export function toInputNumber(v: number): string {
   if (v === 0) return '0';
   const abs = Math.abs(v);
   const digits = abs >= 1000 ? 2 : abs >= 1 ? 4 : Math.min(10, 2 - Math.floor(Math.log10(abs)) + 4);
-  return String(Number(v.toFixed(digits)));
+  return String(Number(v.toFixed(digits))).replace('.', ',');
 }

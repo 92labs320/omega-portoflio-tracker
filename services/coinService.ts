@@ -99,8 +99,22 @@ export async function fetchCoinDetail(id: string): Promise<CoinDetail> {
   return data;
 }
 
+/** Price line over the last `days` days (cached), for portfolio history. */
+export async function fetchLineDays(id: string, days: number): Promise<LinePoint[]> {
+  const data = await fetchRaw(id, 'line', days);
+  return data.type === 'line' ? data.points : [];
+}
+
 export async function fetchChart(id: string, range: Range, type: ChartType): Promise<ChartData> {
   const { days, from } = rangeWindow(range, type);
+  const data = await fetchRaw(id, type, days);
+  // Trim to the exact window (YTD, and OHLC ranges rounded up).
+  return data.type === 'line'
+    ? { type: 'line', points: data.points.filter((p) => p.t >= from) }
+    : { type: 'candle', candles: data.candles.filter((c) => c.t >= from) };
+}
+
+async function fetchRaw(id: string, type: ChartType, days: number): Promise<ChartData> {
   const key = `${id}|${type}|${days}`;
   const hit = chartCache.get(key);
   const ttl = days <= 1 ? 2 * 60_000 : 15 * 60_000;
@@ -118,8 +132,5 @@ export async function fetchChart(id: string, range: Range, type: ChartType): Pro
         : { type: 'candle', candles: (raw.candles ?? []).map(([t, o, h, l, c]) => ({ t, o, h, l, c })) };
     chartCache.set(key, { at: Date.now(), data });
   }
-  // Trim to the exact window (YTD, and OHLC ranges rounded up).
-  return data.type === 'line'
-    ? { type: 'line', points: data.points.filter((p) => p.t >= from) }
-    : { type: 'candle', candles: data.candles.filter((c) => c.t >= from) };
+  return data;
 }

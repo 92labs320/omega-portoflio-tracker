@@ -28,6 +28,7 @@ import {
   setSyncEnabled,
 } from '@/lib/sync';
 import { usePortfolioStore } from '@/store/portfolioStore';
+import { useCurrencyStore } from '@/store/currencyStore';
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
@@ -82,6 +83,7 @@ function toCsv(rows: ReturnType<typeof usePortfolioStore.getState>['transactions
 }
 
 export default function SettingsScreen() {
+  const currencyCode = useCurrencyStore((st) => st.code);
   const insets = useSafeAreaInsets();
   const transactions = usePortfolioStore((s) => s.transactions);
   const sync = usePortfolioStore((s) => s.sync);

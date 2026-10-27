@@ -45,6 +45,7 @@ import {
 import { fetchStockQuotes } from '@/services/marketService';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useWatchlistStore } from '@/store/watchlistStore';
+import { useCurrencyStore } from '@/store/currencyStore';
 
 type Tab = 'general' | 'transactions';
 
@@ -90,6 +91,7 @@ function ChangeBadge({ pct, abs }: { pct: number | null; abs?: number | null }) 
 }
 
 export default function AssetDetailScreen() {
+  const currencyCode = useCurrencyStore((st) => st.code);
   const { key, tab: initialTab } = useLocalSearchParams<{ key: string; tab?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();

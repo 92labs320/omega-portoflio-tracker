@@ -47,6 +47,7 @@ import {
   type Ticker,
 } from '@/services/tradeService';
 import { usePortfolioStore } from '@/store/portfolioStore';
+import { useCurrencyStore } from '@/store/currencyStore';
 
 type Params = {
   id?: string;
@@ -101,6 +102,7 @@ function Row({
 }
 
 export default function TransactionFormScreen() {
+  const currencyCode = useCurrencyStore((st) => st.code);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<Params>();

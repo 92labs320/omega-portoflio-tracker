@@ -17,10 +17,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CoinRow } from '@/components/CoinRow';
 import { Colors, Typography } from '@/constants/Colors';
-import { formatCompactUsd, formatTime } from '@/lib/format';
+import { formatCompactUsd, formatNumber, formatTime } from '@/lib/format';
 import { useMarkets } from '@/hooks/useMarkets';
 import { searchCoins, type CoinMarket, type CoinSearchResult } from '@/services/marketService';
 import { useWatchlistStore } from '@/store/watchlistStore';
+import { useCurrencyStore } from '@/store/currencyStore';
 
 type Filter = 'all' | 'following' | 'gainers' | 'losers';
 const FILTERS: { id: Filter; label: string; icon?: React.ComponentProps<typeof MaterialCommunityIcons>['name'] }[] = [
@@ -31,6 +32,7 @@ const FILTERS: { id: Filter; label: string; icon?: React.ComponentProps<typeof M
 ];
 
 export default function MarketsScreen() {
+  const currencyCode = useCurrencyStore((st) => st.code);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { coins, loading, error, updatedAt, refresh } = useMarkets();
@@ -151,7 +153,7 @@ export default function MarketsScreen() {
           {totals.btcDom !== null && (
             <View style={styles.statCard}>
               <Text style={styles.statLabel}>BTC dominance</Text>
-              <Text style={styles.statValue}>{totals.btcDom.toFixed(1)}%</Text>
+              <Text style={styles.statValue}>{formatNumber(totals.btcDom, 1, 1)}%</Text>
             </View>
           )}
         </ScrollView>
@@ -226,6 +228,7 @@ export default function MarketsScreen() {
       ) : (
         <FlatList
           data={list}
+          extraData={currencyCode}
           renderItem={renderItem}
           keyExtractor={(item) => item.coin.id}
           ListHeaderComponent={header}

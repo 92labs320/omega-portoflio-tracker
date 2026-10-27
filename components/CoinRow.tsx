@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
 import { formatPct, formatSignedNumber, formatUsd } from '@/lib/format';
+import { useCurrencyStore } from '@/store/currencyStore';
 
 export interface CoinRowProps {
   symbol: string;
@@ -34,6 +35,7 @@ export function AssetBadge({ symbol, image, size = 38 }: { symbol: string; image
 }
 
 function CoinRowBase({ symbol, name, image, price, change24h, rank, divider, onPress }: CoinRowProps) {
+  const currencyCode = useCurrencyStore((st) => st.code);
   const has = change24h !== null && Number.isFinite(change24h);
   const positive = (change24h ?? 0) >= 0;
   const color = !has ? Colors.textTertiary : positive ? Colors.accent : Colors.red;

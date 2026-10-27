@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { Colors } from '@/constants/Colors';
 import { isSyncEnabled } from '@/lib/sync';
+import { useCurrencyStore } from '@/store/currencyStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useWatchlistStore } from '@/store/watchlistStore';
 
@@ -20,6 +21,7 @@ export default function RootLayout() {
         console.warn('Failed to open local database', e);
         return;
       }
+      useCurrencyStore.getState().load().catch(() => {});
       if (await isSyncEnabled().catch(() => false)) {
         sync().catch(() => {});
       }

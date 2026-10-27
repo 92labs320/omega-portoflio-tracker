@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { PieChart } from 'react-native-gifted-charts';
 
 import { Colors } from '@/constants/Colors';
+import { formatNumber } from '@/lib/format';
 
 export interface DonutSlice {
   value: number;
@@ -38,7 +39,7 @@ export function DonutChart({ data, centerLabel }: { data: DonutSlice[]; centerLa
             <Text style={styles.legendLabel} numberOfLines={1}>
               {s.label}
             </Text>
-            <Text style={styles.legendValue}>{((s.value / total) * 100).toFixed(1)}%</Text>
+            <Text style={styles.legendValue}>{formatNumber((s.value / total) * 100, 1, 1)}%</Text>
           </View>
         ))}
       </View>
