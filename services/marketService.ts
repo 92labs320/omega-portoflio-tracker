@@ -224,6 +224,17 @@ export async function fetchStockProfiles(symbols: string[]): Promise<Record<stri
   return out;
 }
 
+/** "NASDAQ NMS - GLOBAL MARKET" → "NASDAQ", "NEW YORK STOCK EXCHANGE, INC." → "NYSE". */
+export function shortExchange(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const u = raw.toUpperCase();
+  if (u.includes('NASDAQ')) return 'NASDAQ';
+  if (u.includes('NEW YORK STOCK EXCHANGE') || u.startsWith('NYSE')) return u.includes('ARCA') ? 'NYSE Arca' : 'NYSE';
+  if (u.includes('CBOE') || u.includes('BATS')) return 'Cboe';
+  if (u.includes('TORONTO')) return 'TSX';
+  return raw.split(/ - |,/)[0].trim();
+}
+
 /** Shown in Markets → Stocks before the user searches. */
 export const POPULAR_STOCKS = [
   'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AVGO', 'BRK.B', 'JPM',

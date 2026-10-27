@@ -32,11 +32,19 @@ import {
 import type { AssetCategory, TransactionType } from '@/lib/types';
 import {
   fetchCryptoQuotes,
+  fetchStockProfiles,
   fetchStockQuotes,
   searchCoins,
+  searchStocks,
+  shortExchange,
   stockQuotesAvailable,
   type CoinSearchResult,
+  type StockHit,
+  type StockProfile,
+  type StockQuote,
 } from '@/services/marketService';
+import { AssetBadge } from '@/components/CoinRow';
+import { formatPct } from '@/lib/format';
 import {
   BROKERS,
   GLOBAL_EXCHANGE,
@@ -134,8 +142,15 @@ export default function TransactionFormScreen() {
   const [results, setResults] = useState<CoinSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [ticker, setTickerSymbol] = useState(editing && !isCrypto ? editing.symbol : '');
-  const [stockName, setStockName] = useState(editing && !isCrypto ? editing.name : '');
+  const presetStock = !editing && !isCrypto && params.symbol ? params.symbol.toUpperCase() : '';
+  const [ticker, setTickerSymbol] = useState(editing && !isCrypto ? editing.symbol : presetStock);
+  const [stockName, setStockName] = useState(editing && !isCrypto ? editing.name : presetStock ? params.name ?? '' : '');
+  const [stockPicked, setStockPicked] = useState(Boolean(editing && !isCrypto) || Boolean(presetStock));
+  const [stockQuery, setStockQuery] = useState('');
+  const [stockHits, setStockHits] = useState<StockHit[]>([]);
+  const [stockSearching, setStockSearching] = useState(false);
+  const [stockProfile, setStockProfile] = useState<StockProfile | null>(null);
+  const [stockLive, setStockLive] = useState<StockQuote | null>(null);
 
   // ---------- venue ----------
   const [tickers, setTickers] = useState<Ticker[]>([]);
@@ -206,6 +221,85 @@ export default function TransactionFormScreen() {
     }, 350);
     return () => clearTimeout(t);
   }, [query, isCrypto, asset]);
+
+  // ---------- stock search ----------
+  const stockSeq = useRef(0);
+  useEffect(() => {
+    if (isCrypto || stockPicked) return;
+    const q = stockQuery.trim();
+    if (q.length < 1) {
+      setStockHits([]);
+      setStockSearching(false);
+      return;
+    }
+    const seq = ++stockSeq.current;
+    setStockSearching(true);
+    const t = setTimeout(() => {
+      searchStocks(q)
+        .then((r) => seq === stockSeq.current && setStockHits(r))
+        .catch(() => seq === stockSeq.current && setStockHits([]))
+        .finally(() => seq === stockSeq.current && setStockSearching(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [stockQuery, isCrypto, stockPicked]);
+
+  // Selected stock: company profile (logo, exchange) + live quote; prefill today's price.
+  const stockAutoPriced = useRef<string | null>(null);
+  useEffect(() => {
+    if (isCrypto || !stockPicked || !ticker) return;
+    let alive = true;
+    const sym = ticker.toUpperCase();
+    fetchStockProfiles([sym])
+      .then((p) => {
+        if (!alive) return;
+        const prof = p[sym] ?? null;
+        setStockProfile(prof);
+        if (prof?.name) setStockName((n) => n || prof.name);
+      })
+      .catch(() => {});
+    const loadQuote = () =>
+      fetchStockQuotes([sym])
+        .then((q) => {
+          if (!alive) return;
+          const live = q[sym] ?? null;
+          setStockLive(live);
+          if (live && !isEdit && stockAutoPriced.current !== sym && Math.abs(Date.now() - ts) < NOW_WINDOW) {
+            stockAutoPriced.current = sym;
+            setPrice(toInputNumber(live.price));
+            setUsdPerQuote(1);
+            setPriceSource('Finnhub · latest price');
+          }
+        })
+        .catch(() => {});
+    loadQuote();
+    const t = setInterval(loadQuote, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCrypto, stockPicked, ticker]);
+
+  const pickStock = (h: { symbol: string; name: string }) => {
+    setTickerSymbol(h.symbol.toUpperCase());
+    setStockName(h.name);
+    setStockProfile(null);
+    setStockLive(null);
+    setStockPicked(true);
+    setStockQuery('');
+    setStockHits([]);
+  };
+
+  const changeStock = () => {
+    setStockPicked(false);
+    setTickerSymbol('');
+    setStockName('');
+    setStockProfile(null);
+    setStockLive(null);
+    stockAutoPriced.current = null;
+    setPrice('');
+    setPriceSource(null);
+  };
 
   // ---------- price lookup ----------
   const refreshPrice = useCallback(
@@ -617,7 +711,7 @@ export default function TransactionFormScreen() {
           <View style={styles.headerCenter}>
             {asset?.thumb ? <Image source={{ uri: asset.thumb }} style={styles.headerLogo} /> : null}
             <Text style={styles.headerTitle} numberOfLines={1}>
-              {isCrypto ? asset?.name : isEdit ? 'Edit stock' : 'Add stock'}
+              {isCrypto ? asset?.name : stockPicked && (stockName || ticker) ? stockName || ticker : isEdit ? 'Edit stock' : 'Add stock'}
             </Text>
           </View>
           {isCrypto && !isEdit ? (
@@ -660,32 +754,84 @@ export default function TransactionFormScreen() {
         contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 120 + insets.bottom }}
         keyboardShouldPersistTaps="handled"
       >
-        {!isCrypto ? (
-          <>
-            <View style={styles.inputRow}>
-              <Text style={styles.rowLabel}>Ticker</Text>
+        {!isCrypto && stockPicked ? (
+          <View style={styles.stockCard}>
+            <AssetBadge symbol={ticker} image={stockProfile?.logo ?? undefined} size={44} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.stockSymbol}>
+                {ticker}
+                {shortExchange(stockProfile?.exchange) ? (
+                  <Text style={styles.stockExchange}>  {shortExchange(stockProfile?.exchange)}</Text>
+                ) : null}
+              </Text>
+              <Text style={styles.stockName} numberOfLines={1}>
+                {stockName || stockProfile?.name || ' '}
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.stockPrice}>{stockLive ? formatUsd(stockLive.price) : '—'}</Text>
+              {stockLive?.change24h != null ? (
+                <Text style={[styles.stockChange, { color: stockLive.change24h >= 0 ? Colors.green : Colors.red }]}>
+                  {formatPct(stockLive.change24h)}
+                </Text>
+              ) : null}
+            </View>
+            {!isEdit ? (
+              <Pressable onPress={changeStock} hitSlop={10} style={{ marginLeft: 10 }} accessibilityLabel="Change stock">
+                <MaterialCommunityIcons name="swap-horizontal" size={22} color={Colors.textSecondary} />
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
+        {!isCrypto && !stockPicked ? (
+          <View style={{ marginTop: 8 }}>
+            <View style={[styles.search, { marginHorizontal: 0 }]}>
+              <MaterialCommunityIcons name="magnify" size={20} color={Colors.textSecondary} style={{ marginRight: 8 }} />
               <TextInput
-                style={styles.input}
-                placeholder="e.g. AAPL"
+                style={styles.searchInput}
+                placeholder="Search stock · Apple, TSLA, SPY…"
                 placeholderTextColor={Colors.textTertiary}
-                value={ticker}
-                onChangeText={(v) => setTickerSymbol(v.toUpperCase())}
-                autoCapitalize="characters"
+                value={stockQuery}
+                onChangeText={setStockQuery}
                 autoCorrect={false}
-                editable={!isEdit}
+                autoCapitalize="none"
+                autoFocus
+                returnKeyType="search"
               />
+              {stockSearching ? <ActivityIndicator size="small" color={Colors.accent} /> : null}
             </View>
-            <View style={styles.inputRow}>
-              <Text style={styles.rowLabel}>Company name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Apple Inc."
-                placeholderTextColor={Colors.textTertiary}
-                value={stockName}
-                onChangeText={setStockName}
-              />
-            </View>
-          </>
+            {stockHits.map((h) => (
+              <Pressable
+                key={h.symbol}
+                style={({ pressed }) => [styles.resultRow, pressed && { opacity: 0.6 }]}
+                onPress={() => pickStock(h)}
+                accessibilityRole="button"
+              >
+                <AssetBadge symbol={h.symbol} size={32} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.resultSymbol}>{h.symbol}</Text>
+                  <Text style={styles.resultName} numberOfLines={1}>
+                    {h.name}
+                    {h.type && h.type !== 'Common Stock' ? ` · ${h.type}` : ''}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+            {stockQuery.trim().length >= 1 && !stockSearching && stockHits.length === 0 ? (
+              <Pressable
+                style={styles.resultRow}
+                onPress={() => /^[A-Za-z0-9.\-]{1,12}$/.test(stockQuery.trim()) && pickStock({ symbol: stockQuery.trim(), name: '' })}
+              >
+                <Text style={styles.resultName}>
+                  No match. Tap to use “{stockQuery.trim().toUpperCase()}” as the ticker.
+                </Text>
+              </Pressable>
+            ) : null}
+            {stockQuery.trim().length === 0 ? (
+              <Text style={styles.hint}>Search US stocks & ETFs by name or ticker.</Text>
+            ) : null}
+          </View>
         ) : null}
 
         <Row
@@ -925,6 +1071,21 @@ const styles = StyleSheet.create({
   submit: { height: 56, borderRadius: 12, backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center' },
   submitText: { color: Colors.background, fontSize: 18, fontWeight: '800' },
 
+  stockCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  stockSymbol: { color: Colors.text, fontSize: 18, fontWeight: '800' },
+  stockExchange: { color: Colors.textTertiary, fontSize: 12, fontWeight: '700' },
+  stockName: { color: Colors.textSecondary, fontSize: 13, marginTop: 2 },
+  stockPrice: { color: Colors.text, fontSize: 16, fontWeight: '700' },
+  stockChange: { fontSize: 13, fontWeight: '700', marginTop: 2 },
   search: {
     flexDirection: 'row',
     alignItems: 'center',

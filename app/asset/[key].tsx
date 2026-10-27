@@ -42,7 +42,7 @@ import {
   type CoinDetail,
   type Range,
 } from '@/services/coinService';
-import { fetchStockProfiles, fetchStockQuotes, type StockProfile, type StockQuote } from '@/services/marketService';
+import { fetchStockProfiles, fetchStockQuotes, shortExchange, type StockProfile, type StockQuote } from '@/services/marketService';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useWatchlistStore } from '@/store/watchlistStore';
 import { useCurrencyStore } from '@/store/currencyStore';
@@ -250,6 +250,7 @@ export default function AssetDetailScreen() {
           {name ? (
             <Text style={styles.headerName} numberOfLines={1}>
               {name}
+              {!isCrypto && shortExchange(profile?.exchange) ? ` · ${shortExchange(profile?.exchange)}` : ''}
             </Text>
           ) : null}
         </View>
@@ -530,7 +531,7 @@ export default function AssetDetailScreen() {
                   <View style={styles.card}>
                     <Text style={styles.cardTitle}>About {profile.name}</Text>
                     <DataRow label="Market cap" value={formatCompactUsd(profile.marketCap)} />
-                    {profile.exchange ? <DataRow label="Exchange" value={profile.exchange.replace(/ ?-.*$/, '')} /> : null}
+                    {profile.exchange ? <DataRow label="Exchange" value={shortExchange(profile.exchange) ?? profile.exchange} /> : null}
                     {profile.industry ? <DataRow label="Industry" value={profile.industry} /> : null}
                     {profile.country ? <DataRow label="Country" value={profile.country} /> : null}
                     {profile.ipo ? <DataRow label="IPO" value={formatDate(profile.ipo)} /> : null}
