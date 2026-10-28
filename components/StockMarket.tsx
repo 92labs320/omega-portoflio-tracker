@@ -8,6 +8,7 @@ import { Colors } from '@/constants/Colors';
 import { useStocks } from '@/hooks/useStocks';
 import { POPULAR_STOCKS, searchStocks, type StockHit } from '@/services/marketService';
 import { useCurrencyStore } from '@/store/currencyStore';
+import { usePullRefresh } from '@/hooks/usePullRefresh';
 
 type Filter = 'all' | 'gainers' | 'losers';
 const FILTERS: { id: Filter; label: string; icon?: React.ComponentProps<typeof MaterialCommunityIcons>['name'] }[] = [
@@ -166,6 +167,7 @@ export function StockMarket({ query, active, onStatus }: Props) {
       </View>
     ) : null;
 
+  const pull = usePullRefresh(refresh);
   return (
     <FlatList
       data={popular}
@@ -196,7 +198,7 @@ export function StockMarket({ query, active, onStatus }: Props) {
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={styles.list}
-      refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={Colors.accent} />}
+      refreshControl={<RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} tintColor={Colors.accent} />}
     />
   );
 }

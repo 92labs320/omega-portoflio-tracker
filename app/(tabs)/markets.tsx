@@ -23,6 +23,7 @@ import { useMarkets } from '@/hooks/useMarkets';
 import { searchCoins, type CoinMarket, type CoinSearchResult } from '@/services/marketService';
 import { useWatchlistStore } from '@/store/watchlistStore';
 import { useCurrencyStore } from '@/store/currencyStore';
+import { usePullRefresh } from '@/hooks/usePullRefresh';
 
 type Filter = 'all' | 'following' | 'gainers' | 'losers';
 const FILTERS: { id: Filter; label: string; icon?: React.ComponentProps<typeof MaterialCommunityIcons>['name'] }[] = [
@@ -191,6 +192,7 @@ export default function MarketsScreen() {
     </>
   );
 
+  const pull = usePullRefresh(refresh);
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -272,7 +274,7 @@ export default function MarketsScreen() {
           contentContainerStyle={styles.list}
           initialNumToRender={15}
           windowSize={10}
-          refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={Colors.accent} />}
+          refreshControl={<RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} tintColor={Colors.accent} />}
           ListEmptyComponent={
             filter === 'all' && query.trim().length >= 2 ? null : (
             <View style={styles.emptyList}>

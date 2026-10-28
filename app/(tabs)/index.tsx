@@ -18,6 +18,7 @@ import { formatPct, formatTime } from '@/lib/format';
 import { useMarkets } from '@/hooks/useMarkets';
 import { useWatchlistStore } from '@/store/watchlistStore';
 import { useCurrencyStore } from '@/store/currencyStore';
+import { usePullRefresh } from '@/hooks/usePullRefresh';
 
 const WATCHLIST_IDS = [
   'bitcoin',
@@ -59,6 +60,7 @@ export default function HomeScreen() {
 
   const openAsset = (id: string) => router.push({ pathname: '/asset/[key]', params: { key: `crypto:${id}` } });
 
+  const pull = usePullRefresh(refresh);
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <ScrollView
@@ -66,7 +68,7 @@ export default function HomeScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={loading && hasData} onRefresh={refresh} tintColor={Colors.accent} />
+          <RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} tintColor={Colors.accent} />
         }
       >
         <View style={styles.header}>

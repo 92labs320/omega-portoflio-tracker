@@ -27,6 +27,7 @@ import type { AssetCategory } from '@/lib/types';
 import { useCurrencyStore } from '@/store/currencyStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { fetchStockProfiles, type StockProfile } from '@/services/marketService';
+import { usePullRefresh } from '@/hooks/usePullRefresh';
 
 type Filter = 'all' | AssetCategory;
 const FILTERS: { id: Filter; label: string }[] = [
@@ -179,6 +180,7 @@ export default function PortfolioScreen() {
 
   const chartData = history && history.points.length > 1 ? { type: 'line' as const, points: history.points } : null;
 
+  const pull = usePullRefresh(refreshQuotes);
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       {/* Header */}
@@ -201,7 +203,7 @@ export default function PortfolioScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         scrollEnabled={!scrub}
-        refreshControl={<RefreshControl refreshing={quotesLoading} onRefresh={refreshQuotes} tintColor={Colors.accent} />}
+        refreshControl={<RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} tintColor={Colors.accent} />}
       >
         {hasAnyHolding ? (
           <>
