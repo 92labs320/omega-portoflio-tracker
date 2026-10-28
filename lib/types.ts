@@ -78,4 +78,6 @@ export interface Quote {
   change24h: number | null;
   /** No live feed: price of the last recorded trade. */
   stale?: boolean;
+  /** Logo URL (crypto). */
+  image?: string | null;
 }

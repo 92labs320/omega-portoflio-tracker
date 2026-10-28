@@ -249,8 +249,16 @@ export default function SettingsScreen() {
           <Row
             icon="file-import-outline"
             label="Import transactions (CSV)"
-            value="From Delta"
-            onPress={() => router.push('/import')}
+            onPress={() =>
+              Alert.alert(
+                'Import a CSV file',
+                'Make sure your file uses the Omega CSV format, with these columns:\n\nDate, Way, Base amount, Base currency (name), Base type, Quote amount, Quote currency, Exchange, Sent/Received from, Sent to, Fee amount, Fee currency (name), Notes\n\nFiles with other columns cannot be imported.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Continue', onPress: () => router.push('/import') },
+                ],
+              )
+            }
           />
           <Row icon="file-delimited-outline" label="Export transactions (CSV)" onPress={exportCsv} />
           {cloud && <Row icon="cloud-remove-outline" label="Delete cloud backup" onPress={deleteCloud} destructive />}

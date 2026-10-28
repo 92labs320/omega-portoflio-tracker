@@ -97,7 +97,7 @@ export async function fetchCryptoQuotes(ids: string[]): Promise<Record<string, Q
     for (const id of unique) {
       const c = byId.get(id);
       if (c && typeof c.current_price === 'number') {
-        out[id] = { price: c.current_price, change24h: c.price_change_percentage_24h ?? null };
+        out[id] = { price: c.current_price, change24h: c.price_change_percentage_24h ?? null, image: c.image };
       }
     }
   } catch {

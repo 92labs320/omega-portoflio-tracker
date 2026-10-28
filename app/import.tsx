@@ -118,9 +118,21 @@ export default function ImportScreen() {
             <MaterialCommunityIcons name="file-upload-outline" size={56} color={Colors.accent} />
             <Text style={styles.heroTitle}>Bring your history</Text>
             <Text style={styles.heroText}>
-              Import a CSV exported from Delta (Settings → Export portfolio). Buys, sells, staking rewards, airdrops,
-              deposits and withdrawals are converted to USD using the rate of each transaction’s date.
+              Buys, sells, staking rewards, airdrops, deposits and withdrawals are imported and converted to USD at the
+              rate of each transaction’s date.
             </Text>
+            <View style={styles.formatBox}>
+              <Text style={styles.formatTitle}>Required format</Text>
+              <Text style={styles.formatText}>
+                One transaction per line with these columns:{'\n'}
+                Date · Way (BUY, SELL, DEPOSIT, WITHDRAW) · Base amount · Base currency (name) · Base type (CRYPTO,
+                STOCK, FUND) · Quote amount (total) · Quote currency · Exchange · Sent/Received from · Sent to · Fee
+                amount · Fee currency (name) · Notes
+              </Text>
+              <Text style={[styles.formatText, { marginTop: 6 }]}>
+                Example: 2024-05-01T14:30:00Z, BUY, 0.5, ETH (Ethereum), CRYPTO, 1500, USDT, Binance
+              </Text>
+            </View>
             {phase === 'reading' ? (
               <View style={styles.readingRow}>
                 <ActivityIndicator color={Colors.accent} />
@@ -264,6 +276,9 @@ const styles = StyleSheet.create({
   hero: { alignItems: 'center', paddingTop: 40, paddingHorizontal: 8, gap: 10 },
   heroTitle: { color: Colors.text, fontSize: 22, fontWeight: '800', textAlign: 'center', marginTop: 6 },
   heroText: { color: Colors.textSecondary, fontSize: 15, lineHeight: 21, textAlign: 'center' },
+  formatBox: { alignSelf: 'stretch', backgroundColor: Colors.card, borderRadius: 14, padding: 14, marginTop: 10 },
+  formatTitle: { color: Colors.text, fontSize: 14, fontWeight: '800', marginBottom: 6 },
+  formatText: { color: Colors.textSecondary, fontSize: 12, lineHeight: 17 },
   readingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16 },
   muted: { color: Colors.textSecondary, fontSize: 14, textAlign: 'center' },
   error: { color: Colors.red, fontSize: 14, textAlign: 'center', marginTop: 12 },

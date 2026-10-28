@@ -55,7 +55,7 @@ test('parseImport maps Delta rows to transaction drafts', () => {
 });
 
 test('parseImport rejects unknown formats', () => {
-  assert.throws(() => parseImport('a,b,c\n1,2,3'), /Unrecognized/);
+  assert.throws(() => parseImport('a,b,c\n1,2,3'), /Omega CSV format/);
 });
 
 test('transfer_out removes quantity at average cost without P&L', () => {

@@ -103,13 +103,13 @@ export function detectFormat(header: string[]): ImportFormat | null {
   return DELTA_HEADERS.every((k) => h.includes(k)) ? 'delta' : null;
 }
 
-/** Parses a Delta ("Main Portfolio") CSV export. */
+/** Parses a CSV in the Omega import format (same columns as a Delta export). */
 export function parseImport(text: string): ParsedImport {
   const rows = parseCsv(text);
   if (rows.length < 2) throw new Error('The file is empty.');
   const format = detectFormat(rows[0]);
   if (!format) {
-    throw new Error('Unrecognized CSV format. Export your portfolio from Delta (Settings → Export) and try again.');
+    throw new Error('This file doesn’t use the Omega CSV format. Check the column names and try again.');
   }
   const col = new Map(rows[0].map((h, i) => [h.trim(), i]));
   const get = (r: string[], k: string) => r[col.get(k) ?? -1]?.trim() ?? '';
@@ -177,7 +177,7 @@ export function parseImport(text: string): ParsedImport {
       feeCurrency: feeCurrency || quoteCurrency || 'USD',
       exchange,
       exchangeId: EXCHANGE_IDS[exchange.toLowerCase()] ?? '',
-      notes: [get(r, 'Notes'), label, 'Imported from Delta'].filter(Boolean).join(' · ').slice(0, 500),
+      notes: [get(r, 'Notes'), label, 'Imported from CSV'].filter(Boolean).join(' · ').slice(0, 500),
     });
   });
 

@@ -305,7 +305,7 @@ export default function PortfolioScreen() {
                 {rows.map(({ h, key, q, value, change, changePct }, idx) => {
                   const img =
                     h.category === 'crypto'
-                      ? images.get(h.assetId)
+                      ? images.get(h.assetId) ?? quotes[quoteKey(h.category, h.assetId)]?.image ?? undefined
                       : stockProfiles[h.assetId.toUpperCase()]?.logo ?? undefined;
                   const ac = assetColor(h.symbol);
                   return (
