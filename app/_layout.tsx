@@ -4,11 +4,13 @@ import { StatusBar } from 'expo-status-bar';
 
 import { Colors } from '@/constants/Colors';
 import { isSyncEnabled } from '@/lib/sync';
+import { useOtaUpdates } from '@/hooks/useOtaUpdates';
 import { useCurrencyStore } from '@/store/currencyStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useWatchlistStore } from '@/store/watchlistStore';
 
 export default function RootLayout() {
+  useOtaUpdates();
   const load = usePortfolioStore((s) => s.load);
   const sync = usePortfolioStore((s) => s.sync);
 

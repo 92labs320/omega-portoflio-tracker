@@ -12,19 +12,25 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://omega-portoflio-tracker-backend.vercel.app"
-      }
+      },
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://omega-portoflio-tracker-backend.vercel.app"
+      },
+      "channel": "preview",
+      "ios": {
+        "simulator": false
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://omega-portoflio-tracker-backend.vercel.app"
-      }
+      },
+      "channel": "production"
     }
   },
   "submit": {

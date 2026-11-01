@@ -54,6 +54,14 @@
         "projectId": "f035d4b6-e0c2-467f-9989-81b67ac49fa7"
       }
     },
-    "owner": "92labs320"
+    "owner": "92labs320",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/f035d4b6-e0c2-467f-9989-81b67ac49fa7",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    }
   }
 }
