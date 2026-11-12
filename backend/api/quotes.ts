@@ -1,5 +1,5 @@
 import { route } from '../lib/http.js';
-import { parseSymbols } from '../lib/core.js';
+import { HttpError, parseSymbols } from '../lib/core.js';
 import { finnhub } from '../lib/finnhub.js';
 
 interface FinnhubQuote {
@@ -30,7 +30,40 @@ interface FinnhubProfile {
  * GET /api/quotes?symbols=AAPL&profile=1 → { profiles: { AAPL: { name, logo, exchange, ... } } } (slow-changing, cached 1 day)
  * Finnhub proxy; the key never ships in the app.
  */
+interface FinnhubNews {
+  id: number;
+  datetime: number;
+  headline: string;
+  image?: string;
+  source?: string;
+  summary?: string;
+  url: string;
+}
+
+const NEWS_CATEGORIES = new Set(['crypto', 'general']);
+
 export default route(['GET'], async (req, res) => {
+  // GET /api/quotes?news=crypto|general → { news: [{ id, headline, image, source, url, time }] }
+  if (typeof req.query.news === 'string') {
+    const category = req.query.news;
+    if (!NEWS_CATEGORIES.has(category)) throw new HttpError(400, 'news must be crypto or general');
+    const items = await finnhub<FinnhubNews[]>('/news', { category });
+    const news = (Array.isArray(items) ? items : [])
+      .filter((n) => n.headline && /^https:\/\//.test(n.url))
+      .slice(0, 20)
+      .map((n) => ({
+        id: n.id,
+        headline: n.headline,
+        image: n.image && /^https:\/\//.test(n.image) ? n.image : null,
+        source: n.source ?? '',
+        url: n.url,
+        time: n.datetime * 1000,
+      }));
+    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=600, stale-while-revalidate=1800');
+    res.status(200).json({ news });
+    return;
+  }
+
   const symbols = parseSymbols(req.query.symbols);
 
   if (req.query.profile === '1') {

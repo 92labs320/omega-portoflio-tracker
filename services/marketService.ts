@@ -21,7 +21,7 @@ export interface CoinSearchResult {
   thumb: string;
 }
 
-async function getJson<T>(url: string, timeoutMs = 12000): Promise<T> {
+export async function getJson<T>(url: string, timeoutMs = 12000): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {

@@ -34,6 +34,33 @@ export default route(['GET', 'POST'], async (req, res) => {
     return;
   }
 
+  // GET /api/search?trending=1 → { coins: [{ id, symbol, name, image, price, change24h }] } (CoinGecko trending)
+  if (req.query.trending === '1') {
+    const data = await coingecko<{
+      coins?: {
+        item: {
+          id: string;
+          symbol: string;
+          name: string;
+          small?: string;
+          thumb?: string;
+          data?: { price?: number; price_change_percentage_24h?: { usd?: number } };
+        };
+      }[];
+    }>('/search/trending', {});
+    const coins = (data.coins ?? []).slice(0, 15).map(({ item }) => ({
+      id: item.id,
+      symbol: item.symbol,
+      name: item.name,
+      image: item.small ?? item.thumb ?? null,
+      price: typeof item.data?.price === 'number' ? item.data.price : null,
+      change24h: item.data?.price_change_percentage_24h?.usd ?? null,
+    }));
+    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=900, stale-while-revalidate=3600');
+    res.status(200).json({ coins });
+    return;
+  }
+
   const q = typeof req.query.q === 'string' ? req.query.q.trim().toLowerCase() : '';
   if (q.length < 1 || q.length > 40) throw new HttpError(400, 'q must be 1-40 characters');
 

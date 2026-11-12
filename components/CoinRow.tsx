@@ -23,11 +23,14 @@ export function AssetBadge({
   image,
   size = 38,
   plate,
+  gap = 12,
 }: {
   symbol: string;
   image?: string;
   size?: number;
   plate?: boolean;
+  /** Space to the right of the badge (0 when it sits alone, e.g. in a card). */
+  gap?: number;
 }) {
   const [failed, setFailed] = useState(false);
   if (image && !failed) {
@@ -40,14 +43,14 @@ export function AssetBadge({
           width: size,
           height: size,
           borderRadius: size / 2,
-          marginRight: 12,
+          marginRight: gap,
           ...(plate ? { backgroundColor: '#FFFFFF', borderWidth: size * 0.12, borderColor: '#FFFFFF' } : null),
         }}
       />
     );
   }
   return (
-    <View style={[styles.badge, { width: size, height: size, borderRadius: size / 3 }]}>
+    <View style={[styles.badge, { width: size, height: size, borderRadius: size / 3, marginRight: gap }]}>
       <Text style={styles.badgeText}>{symbol.slice(0, 3).toUpperCase()}</Text>
     </View>
   );
