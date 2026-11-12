@@ -38,11 +38,11 @@ export default function SettingsScreen() {
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
   const items: { icon: IconName; label: string; value?: string; href: Href }[] = [
-    { icon: 'cog-outline', label: 'General', value: currency, href: '/settings/general' },
-    { icon: 'briefcase-outline', label: 'Portfolio', href: '/settings/portfolio' },
-    { icon: 'lock-outline', label: 'Security', value: appLock ? `${lockLabel} on` : 'Off', href: '/settings/security' },
-    { icon: 'sync', label: 'Data & Backup', href: '/settings/data' },
-    { icon: 'help-circle-outline', label: 'Support & About', href: '/settings/about' },
+    { icon: 'cog-outline', label: 'General', value: currency, href: '/preferences/general' },
+    { icon: 'briefcase-outline', label: 'Portfolio', href: '/preferences/portfolio' },
+    { icon: 'lock-outline', label: 'Security', value: appLock ? `${lockLabel} on` : 'Off', href: '/preferences/security' },
+    { icon: 'sync', label: 'Data & Backup', href: '/preferences/data' },
+    { icon: 'help-circle-outline', label: 'Support & About', href: '/preferences/about' },
   ];
 
   return (
@@ -53,7 +53,7 @@ export default function SettingsScreen() {
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         {/* Status card */}
-        <Pressable style={styles.hero} onPress={() => router.push('/settings/data')} accessibilityRole="button">
+        <Pressable style={styles.hero} onPress={() => router.push('/preferences/data')} accessibilityRole="button">
           <View style={styles.heroTop}>
             <View style={styles.logo}>
               <Text style={styles.logoText}>Ω</Text>

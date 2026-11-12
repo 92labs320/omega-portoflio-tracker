@@ -8,6 +8,13 @@ let mod: LA | null | undefined;
 function la(): LA | null {
   if (mod !== undefined) return mod;
   try {
+    // Older builds don't ship the native side: check before importing the package.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { requireOptionalNativeModule } = require('expo-modules-core') as typeof import('expo-modules-core');
+    if (!requireOptionalNativeModule('ExpoLocalAuthentication')) {
+      mod = null;
+      return mod;
+    }
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     mod = require('expo-local-authentication') as LA;
   } catch {

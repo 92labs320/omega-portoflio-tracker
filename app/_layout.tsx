@@ -11,6 +11,9 @@ import { usePortfolioStore } from '@/store/portfolioStore';
 import { usePrefsStore } from '@/store/prefsStore';
 import { useWatchlistStore } from '@/store/watchlistStore';
 
+/** Show an error screen with a retry button instead of closing the app on a render error. */
+export { ErrorBoundary } from 'expo-router';
+
 export default function RootLayout() {
   useOtaUpdates();
   const load = usePortfolioStore((s) => s.load);
@@ -47,7 +50,7 @@ export default function RootLayout() {
         <Stack.Screen name="add-transaction" options={{ presentation: 'modal' }} />
         <Stack.Screen name="asset/[key]" />
         <Stack.Screen name="import" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="settings" />
+        <Stack.Screen name="preferences" />
       </Stack>
       <AppLock />
     </>
