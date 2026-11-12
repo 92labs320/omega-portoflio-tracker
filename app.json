@@ -13,7 +13,8 @@
       "bundleIdentifier": "com.92labs.omegaportfolio",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "CFBundleDevelopmentRegion": "en"
+        "CFBundleDevelopmentRegion": "en",
+        "NSFaceIDUsageDescription": "Omega uses Face ID to unlock your portfolio."
       }
     },
     "android": {
@@ -38,7 +39,13 @@
       ],
       "expo-secure-store",
       "expo-sqlite",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Omega uses Face ID to unlock your portfolio."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

@@ -26,6 +26,7 @@ import { quoteKey, summarize } from '@/lib/portfolio';
 import type { AssetCategory } from '@/lib/types';
 import { useCurrencyStore } from '@/store/currencyStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
+import { MASK, usePrefsStore } from '@/store/prefsStore';
 import { fetchStockProfiles, type StockProfile } from '@/services/marketService';
 import { usePullRefresh } from '@/hooks/usePullRefresh';
 
@@ -82,7 +83,12 @@ export default function PortfolioScreen() {
   const { coins } = useMarkets();
 
   const [filter, setFilter] = useState<Filter>('all');
-  const [range, setRange] = useState<PortfolioRange>('ALL');
+  const prefs = usePrefsStore();
+  const [range, setRange] = useState<PortfolioRange>(prefs.defaultRange);
+  useEffect(() => {
+    if (prefs.loaded) setRange(prefs.defaultRange);
+  }, [prefs.loaded, prefs.defaultRange]);
+  const hidden = prefs.hideBalances;
   const [sort, setSort] = useState<Sort>('value_desc');
   const [scrub, setScrub] = useState<ScrubPoint | null>(null);
   const [currencyPicker, setCurrencyPicker] = useState(false);
@@ -162,8 +168,9 @@ export default function PortfolioScreen() {
       perf_asc: (a, b) => (a.changePct ?? Infinity) - (b.changePct ?? Infinity),
       name: (a, b) => a.h.symbol.localeCompare(b.h.symbol),
     };
-    return out.sort(by[sort]);
-  }, [filtered, quotes, history, range, sort]);
+    const visible = prefs.hideSmallHoldings ? out.filter((r) => r.value === null || r.value >= 1) : out;
+    return visible.sort(by[sort]);
+  }, [filtered, quotes, history, range, sort, prefs.hideSmallHoldings]);
 
   const donut = rows
     .filter((r) => r.value !== null && r.value > 0)
@@ -225,7 +232,7 @@ export default function PortfolioScreen() {
             <View style={styles.worthSection}>
               <View style={styles.worthRow}>
                 <Text style={styles.worthValue} numberOfLines={1} adjustsFontSizeToFit>
-                  {formatAmount(shownValue)}
+                  {hidden ? MASK : formatAmount(shownValue)}
                 </Text>
                 <Pressable onPress={() => setCurrencyPicker(true)} style={styles.worthCurrency} hitSlop={8}>
                   <Text style={styles.worthCurrencyText}>{currency}</Text>
@@ -242,7 +249,7 @@ export default function PortfolioScreen() {
                 </>
               ) : (
                 <>
-                  <ChangeLine abs={headAbs} pct={headPct} />
+                  <ChangeLine abs={hidden ? null : headAbs} pct={headPct} />
                   <Text style={styles.updated}>
                     {RANGE_LABEL[range]}
                     {range !== 'ALL' ? ' · net of deposits' : ' · unrealized'}
@@ -254,6 +261,8 @@ export default function PortfolioScreen() {
               )}
             </View>
 
+            {prefs.showPortfolioChart && !hidden ? (
+              <>
             {/* Evolution chart */}
             <View style={styles.chartWrap}>
               {chartData ? (
@@ -281,6 +290,8 @@ export default function PortfolioScreen() {
                 </Pressable>
               ))}
             </View>
+              </>
+            ) : null}
             <Text style={styles.chartNote}>
               {quotesError
                 ? `${quotesError}${quotesUpdatedAt ? ` · last update ${formatTime(quotesUpdatedAt)}` : ''}`
@@ -335,12 +346,12 @@ export default function PortfolioScreen() {
                       <View style={styles.assetMeta}>
                         <Text style={styles.assetSymbol}>{h.symbol.toUpperCase()}</Text>
                         <Text style={styles.assetSub} numberOfLines={1}>
-                          {formatQty(h.quantity)} | {q ? formatUsd(q.price) : 'no price'}
+                          {hidden ? '••••' : formatQty(h.quantity)} | {q ? formatUsd(q.price) : 'no price'}
                         </Text>
                       </View>
                       <View style={styles.holdingRight}>
-                        <Text style={styles.holdingVal}>{value !== null ? formatUsd(value) : '—'}</Text>
-                        <ChangeLine abs={change} pct={changePct} size="sm" />
+                        <Text style={styles.holdingVal}>{hidden ? MASK : value !== null ? formatUsd(value) : '—'}</Text>
+                        <ChangeLine abs={hidden ? null : change} pct={changePct} size="sm" />
                       </View>
                     </Pressable>
                   );

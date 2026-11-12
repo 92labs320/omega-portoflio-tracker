@@ -1,300 +1,102 @@
 import React, { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  Pressable,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors, Typography } from '@/constants/Colors';
-import { Config } from '@/constants/Config';
-import { wipeLocalData } from '@/lib/db';
+import { NavRow, type IconName } from '@/components/settings/SettingsUI';
+import { Colors } from '@/constants/Colors';
+import { lockSupport } from '@/lib/biometrics';
 import { formatDateTime } from '@/lib/format';
-import {
-  deleteCloudData,
-  getLastSync,
-  isCloudAvailable,
-  isSyncEnabled,
-  setSyncEnabled,
-} from '@/lib/sync';
-import { usePortfolioStore } from '@/store/portfolioStore';
+import { getLastSync, isCloudAvailable, isSyncEnabled } from '@/lib/sync';
 import { useCurrencyStore } from '@/store/currencyStore';
-
-type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
-
-function Row({
-  icon,
-  label,
-  value,
-  onPress,
-  right,
-  destructive,
-}: {
-  icon: IconName;
-  label: string;
-  value?: string;
-  onPress?: () => void;
-  right?: React.ReactNode;
-  destructive?: boolean;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      style={({ pressed }) => [styles.card, pressed && onPress ? { opacity: 0.7 } : null]}
-      accessibilityRole={onPress ? 'button' : undefined}
-    >
-      <View style={styles.cardRow}>
-        <View style={[styles.iconWrap, destructive && { backgroundColor: 'rgba(255,68,68,0.1)' }]}>
-          <MaterialCommunityIcons name={icon} size={21} color={destructive ? Colors.red : Colors.accent} />
-        </View>
-        <View style={styles.cardContent}>
-          <Text style={[styles.cardLabel, destructive && { color: Colors.red }]}>{label}</Text>
-          {value ? <Text style={styles.cardValue}>{value}</Text> : null}
-        </View>
-        {right ?? (onPress ? <MaterialCommunityIcons name="chevron-right" size={20} color={Colors.textTertiary} /> : null)}
-      </View>
-    </Pressable>
-  );
-}
-
-function toCsv(rows: ReturnType<typeof usePortfolioStore.getState>['transactions']): string {
-  const esc = (v: string | number) => {
-    const s = String(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const header = ['date', 'category', 'type', 'symbol', 'name', 'asset_id', 'quantity', 'price_usd', 'fee_usd', 'platform', 'notes'];
-  const lines = rows.map((t) =>
-    [t.executedAt, t.category, t.type, t.symbol, t.name, t.assetId, t.quantity, t.priceUsd, t.feeUsd, t.exchange, t.notes]
-      .map(esc)
-      .join(','),
-  );
-  return [header.join(','), ...lines].join('\n');
-}
+import { usePortfolioStore } from '@/store/portfolioStore';
+import { usePrefsStore } from '@/store/prefsStore';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const currencyCode = useCurrencyStore((st) => st.code);
   const insets = useSafeAreaInsets();
+  const currency = useCurrencyStore((s) => s.code);
   const transactions = usePortfolioStore((s) => s.transactions);
-  const sync = usePortfolioStore((s) => s.sync);
-  const load = usePortfolioStore((s) => s.load);
-  const reset = usePortfolioStore((s) => s.reset);
-  const syncError = usePortfolioStore((s) => s.syncError);
+  const holdings = usePortfolioStore((s) => s.holdings);
+  const appLock = usePrefsStore((s) => s.appLock);
 
-  const cloud = isCloudAvailable();
-  const [enabled, setEnabled] = useState(false);
-  const [lastSync, setLastSync] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const refreshState = useCallback(async () => {
-    setEnabled(await isSyncEnabled());
-    setLastSync(await getLastSync());
-  }, []);
-
+  const [backup, setBackup] = useState<{ on: boolean; last: string | null }>({ on: false, last: null });
+  const [lockLabel, setLockLabel] = useState('Face ID');
   useFocusEffect(
     useCallback(() => {
-      refreshState().catch(() => {});
-    }, [refreshState]),
+      (async () => {
+        setBackup({ on: await isSyncEnabled(), last: await getLastSync() });
+        setLockLabel((await lockSupport()).label);
+      })().catch(() => {});
+    }, []),
   );
 
-  const runSync = async () => {
-    setBusy(true);
-    try {
-      await sync();
-    } catch (e) {
-      Alert.alert('Backup failed', e instanceof Error ? e.message : 'Try again later.');
-    } finally {
-      await refreshState();
-      setBusy(false);
-    }
-  };
-
-  const toggleBackup = async (on: boolean) => {
-    if (on) {
-      Alert.alert(
-        'Turn on cloud backup?',
-        'Your transactions will be copied to Omega’s secure server, linked only to an anonymous key stored in this iPhone’s Keychain. No account, email or name is collected.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Turn on',
-            onPress: async () => {
-              await setSyncEnabled(true);
-              setEnabled(true);
-              await runSync();
-            },
-          },
-        ],
-      );
-    } else {
-      await setSyncEnabled(false);
-      setEnabled(false);
-    }
-  };
-
-  const exportCsv = async () => {
-    if (transactions.length === 0) {
-      Alert.alert('Nothing to export', 'Add a transaction first.');
-      return;
-    }
-    await Share.share({ title: 'Omega transactions', message: toCsv(transactions) });
-  };
-
-  const deleteCloud = () =>
-    Alert.alert(
-      'Delete cloud backup?',
-      'All transactions stored on Omega’s server for this device will be permanently deleted. Data on this iPhone is kept.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setBusy(true);
-            try {
-              await deleteCloudData();
-              await setSyncEnabled(false);
-              await refreshState();
-              Alert.alert('Deleted', 'Your cloud backup has been deleted.');
-            } catch (e) {
-              Alert.alert('Could not delete', e instanceof Error ? e.message : 'Try again later.');
-            } finally {
-              setBusy(false);
-            }
-          },
-        },
-      ],
-    );
-
-  const eraseLocal = () =>
-    Alert.alert(
-      'Erase all data on this iPhone?',
-      enabled
-        ? 'Every transaction on this device will be removed. Your cloud backup is not affected and will be restored on the next sync. Turn off and delete the backup first to remove everything.'
-        : 'Every transaction on this device will be permanently removed. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Erase',
-          style: 'destructive',
-          onPress: async () => {
-            await wipeLocalData();
-            reset();
-            await load();
-            await refreshState();
-          },
-        },
-      ],
-    );
-
-  const open = (url: string) => Linking.openURL(url).catch(() => Alert.alert('Could not open link', url));
-
+  const txCount = transactions.filter((t) => !t.deleted).length;
+  const assetCount = holdings.filter((h) => h.quantity > 0).length;
   const version = Constants.expoConfig?.version ?? '1.0.0';
+
+  const items: { icon: IconName; label: string; value?: string; href: Href }[] = [
+    { icon: 'cog-outline', label: 'General', value: currency, href: '/settings/general' },
+    { icon: 'briefcase-outline', label: 'Portfolio', href: '/settings/portfolio' },
+    { icon: 'lock-outline', label: 'Security', value: appLock ? `${lockLabel} on` : 'Off', href: '/settings/security' },
+    { icon: 'sync', label: 'Data & Backup', href: '/settings/data' },
+    { icon: 'help-circle-outline', label: 'Support & About', href: '/settings/about' },
+  ];
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Settings</Text>
-          <Text style={styles.subtitle}>No account needed · your data stays yours</Text>
-        </View>
+      <View style={styles.header}>
+        <Text style={styles.title}>Settings</Text>
+      </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Your data</Text>
-          <Row
-            icon="database-outline"
-            label="Stored on this iPhone"
-            value={`${transactions.length} transaction${transactions.length === 1 ? '' : 's'}`}
-          />
-          {cloud && (
-            <Row
-              icon="cloud-outline"
-              label="Cloud backup"
-              value={
-                enabled
-                  ? syncError
-                    ? `Last attempt failed · ${syncError}`
-                    : `Last backup: ${formatDateTime(lastSync)}`
-                  : 'Off · data is only on this iPhone'
-              }
-              right={
-                <Switch
-                  value={enabled}
-                  onValueChange={toggleBackup}
-                  disabled={busy}
-                  trackColor={{ true: Colors.accent, false: '#3A3A44' }}
-                />
-              }
-            />
-          )}
-          {cloud && enabled && (
-            <Row
-              icon="cloud-sync-outline"
-              label="Back up now"
-              onPress={busy ? undefined : runSync}
-              right={busy ? <ActivityIndicator color={Colors.accent} /> : undefined}
-            />
-          )}
-          <Row
-            icon="file-import-outline"
-            label="Import transactions (CSV)"
-            onPress={() =>
-              Alert.alert(
-                'Import a CSV file',
-                'Make sure your file uses the Omega CSV format, with these columns:\n\nDate, Way, Base amount, Base currency (name), Base type, Quote amount, Quote currency, Exchange, Sent/Received from, Sent to, Fee amount, Fee currency (name), Notes\n\nFiles with other columns cannot be imported.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Continue', onPress: () => router.push('/import') },
-                ],
-              )
-            }
-          />
-          <Row icon="file-delimited-outline" label="Export transactions (CSV)" onPress={exportCsv} />
-          {cloud && <Row icon="cloud-remove-outline" label="Delete cloud backup" onPress={deleteCloud} destructive />}
-          <Row icon="delete-outline" label="Erase data on this iPhone" onPress={eraseLocal} destructive />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Market data</Text>
-          <Row icon="chart-line" label="Crypto prices" value="Provided by CoinGecko" onPress={() => open('https://www.coingecko.com')} />
-          {cloud && <Row icon="finance" label="Stock prices" value="Provided by Finnhub" onPress={() => open('https://finnhub.io')} />}
-          <Row icon="clock-outline" label="Timing" value="Quotes may be delayed and can differ from other sources." />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About</Text>
-          <Row icon="shield-lock-outline" label="Privacy Policy" onPress={() => open(Config.privacyUrl)} />
-          <Row icon="file-document-outline" label="Terms of Use" onPress={() => open(Config.termsUrl)} />
-          <Row icon="lifebuoy" label="Support" onPress={() => open(Config.supportUrl)} />
-          <Row icon="cellphone" label="Version" value={version} />
-        </View>
-
-        <View style={styles.notice}>
-          <MaterialCommunityIcons name="shield-check-outline" size={22} color={Colors.accent} />
-          <View style={styles.noticeContent}>
-            <Text style={styles.noticeTitle}>Tracking only</Text>
-            <Text style={styles.noticeText}>
-              Omega records the transactions you enter and shows market prices. It is not a broker, an exchange or
-              financial advice, and it never holds or moves your assets.
-            </Text>
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        {/* Status card */}
+        <Pressable style={styles.hero} onPress={() => router.push('/settings/data')} accessibilityRole="button">
+          <View style={styles.heroTop}>
+            <View style={styles.logo}>
+              <Text style={styles.logoText}>Ω</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroTitle}>Omega</Text>
+              <Text style={styles.heroSub}>No account · your data stays on your iPhone</Text>
+            </View>
           </View>
+          <View style={styles.stats}>
+            <View style={styles.stat}>
+              <Text style={styles.statValue}>{txCount}</Text>
+              <Text style={styles.statLabel}>transactions</Text>
+            </View>
+            <View style={styles.stat}>
+              <Text style={styles.statValue}>{assetCount}</Text>
+              <Text style={styles.statLabel}>assets</Text>
+            </View>
+            <View style={[styles.stat, { flex: 1.6 }]}>
+              <View style={styles.backupRow}>
+                <View style={[styles.dot, { backgroundColor: backup.on ? Colors.green : Colors.textTertiary }]} />
+                <Text style={styles.statValue}>{isCloudAvailable() && backup.on ? 'Backed up' : 'Backup off'}</Text>
+              </View>
+              <Text style={styles.statLabel} numberOfLines={1}>
+                {backup.on && backup.last ? formatDateTime(backup.last) : 'Tap to set up'}
+              </Text>
+            </View>
+          </View>
+        </Pressable>
+
+        {/* Sections */}
+        <View style={styles.list}>
+          {items.map((it, i) => (
+            <View key={it.label} style={i < items.length - 1 ? styles.divider : undefined}>
+              <NavRow icon={it.icon} label={it.label} value={it.value} onPress={() => router.push(it.href)} />
+            </View>
+          ))}
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.footerBrand}>OMEGA</Text>
-          <Text style={styles.footerText}>A 92labs product</Text>
-          <Text style={styles.footerText}>© 2026 92labs</Text>
+          <MaterialCommunityIcons name="shield-check-outline" size={20} color={Colors.textTertiary} />
+          <Text style={styles.footerText}>Tracking only · not a broker or financial advice</Text>
+          <Text style={styles.footerText}>Omega {version} · a 92labs product</Text>
         </View>
       </ScrollView>
     </View>
@@ -303,49 +105,40 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
-  container: { flex: 1 },
-  content: { paddingBottom: 36 },
-  header: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 10 },
-  title: { ...Typography.largeTitle, color: Colors.text },
-  subtitle: { ...Typography.footnote, color: Colors.textSecondary, marginTop: 5 },
-  section: { marginTop: 16 },
-  sectionTitle: { ...Typography.headline, color: Colors.text, paddingHorizontal: 20, marginBottom: 10 },
-  card: {
+  header: { paddingVertical: 10 },
+  title: { textAlign: 'center', color: Colors.text, fontSize: 22, fontWeight: '800' },
+
+  hero: {
     marginHorizontal: 16,
-    marginBottom: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    backgroundColor: Colors.card,
-    borderRadius: 14,
+    marginTop: 10,
+    padding: 18,
+    borderRadius: 20,
+    backgroundColor: '#0E2A1B',
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: 'rgba(0,217,100,0.25)',
   },
-  cardRow: { flexDirection: 'row', alignItems: 'center' },
-  iconWrap: {
-    width: 36,
-    height: 36,
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  logo: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: Colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 10,
-    backgroundColor: 'rgba(0,217,100,0.1)',
   },
-  cardContent: { flex: 1, marginLeft: 12, marginRight: 8 },
-  cardLabel: { ...Typography.subheadline, color: Colors.text },
-  cardValue: { ...Typography.caption1, color: Colors.textSecondary, marginTop: 3, lineHeight: 17 },
-  notice: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginTop: 20,
-    padding: 16,
-    backgroundColor: 'rgba(0,217,100,0.07)',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0,217,100,0.18)',
-  },
-  noticeContent: { flex: 1, marginLeft: 12 },
-  noticeTitle: { ...Typography.subheadline, color: Colors.text, marginBottom: 5 },
-  noticeText: { ...Typography.caption1, color: Colors.textSecondary, lineHeight: 18 },
-  footer: { alignItems: 'center', paddingTop: 32, paddingBottom: 12 },
-  footerBrand: { color: Colors.accent, fontSize: 12, fontWeight: '800', letterSpacing: 2, marginBottom: 8 },
-  footerText: { ...Typography.caption1, color: Colors.textTertiary, marginBottom: 3 },
+  logoText: { color: Colors.background, fontSize: 28, fontWeight: '900' },
+  heroTitle: { color: Colors.text, fontSize: 24, fontWeight: '800' },
+  heroSub: { color: Colors.textSecondary, fontSize: 13, marginTop: 2 },
+  stats: { flexDirection: 'row', marginTop: 18, gap: 10 },
+  stat: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 12, padding: 12 },
+  statValue: { color: Colors.text, fontSize: 16, fontWeight: '800' },
+  statLabel: { color: Colors.textSecondary, fontSize: 12, marginTop: 2 },
+  backupRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+
+  list: { marginTop: 22, marginHorizontal: 16, backgroundColor: '#17171C', borderRadius: 16, overflow: 'hidden' },
+  divider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.1)' },
+
+  footer: { alignItems: 'center', gap: 4, marginTop: 30 },
+  footerText: { color: Colors.textTertiary, fontSize: 12 },
 });

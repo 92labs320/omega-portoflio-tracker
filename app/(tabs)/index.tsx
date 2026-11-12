@@ -20,16 +20,15 @@ import { Colors } from '@/constants/Colors';
 import { useMarkets } from '@/hooks/useMarkets';
 import { usePullRefresh } from '@/hooks/usePullRefresh';
 import { useStocks } from '@/hooks/useStocks';
-import { getKv, setKv } from '@/lib/db';
 import { formatAmount, formatPct, formatSignedNumber, formatTime, formatUsd } from '@/lib/format';
 import { quoteKey, summarize } from '@/lib/portfolio';
 import { fetchNews, fetchTrendingCoins, timeAgo, type NewsItem, type TrendingCoin } from '@/services/discoverService';
 import { fetchStockProfiles, POPULAR_STOCKS, type StockProfile } from '@/services/marketService';
 import { useCurrencyStore } from '@/store/currencyStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
+import { usePrefsStore } from '@/store/prefsStore';
 import { useWatchlistStore } from '@/store/watchlistStore';
 
-const HIDE_KEY = 'home.hide_amounts';
 const BAR_MAX = 150;
 
 function greeting(d = new Date()) {
@@ -118,17 +117,9 @@ export default function HomeScreen() {
   );
 
   // ---------- privacy toggle ----------
-  const [hidden, setHidden] = useState(false);
-  useEffect(() => {
-    getKv(HIDE_KEY)
-      .then((v) => setHidden(v === '1'))
-      .catch(() => {});
-  }, []);
-  const toggleHidden = () => {
-    const next = !hidden;
-    setHidden(next);
-    setKv(HIDE_KEY, next ? '1' : '0').catch(() => {});
-  };
+  const hidden = usePrefsStore((s) => s.hideBalances);
+  const setPref = usePrefsStore((s) => s.set);
+  const toggleHidden = () => setPref('hideBalances', !hidden);
   const mask = (s: string) => (hidden ? '••••••' : s);
 
   // ---------- portfolio ----------
